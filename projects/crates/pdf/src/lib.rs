@@ -454,11 +454,7 @@ pub fn set_metadata(input: &Path, out: &Path, patch: &MetadataPatch) -> Result<S
     write_file(out, &bytes, true)?;
 
     let written = parse_document(&bytes)?;
-    Ok(SetMetadataReport {
-        path: out.display().to_string(),
-        pages: pages.len(),
-        metadata: read_metadata(&written)?,
-    })
+    Ok(SetMetadataReport { path: out.display().to_string(), pages: pages.len(), metadata: read_metadata(&written)? })
 }
 
 /// Validates the 1-based indices of [`DocumentArrange`] and returns the input

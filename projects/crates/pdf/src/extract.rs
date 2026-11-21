@@ -500,8 +500,7 @@ fn indexed_color(document: &ParsedDocument, value: &PdfObject) -> std::result::R
     let Ok(PdfObject::Array(items)) = resolve_object(&document.objects, value) else {
         return Err("/ColorSpace array is unreadable".to_string());
     };
-    if items.len() < 4 || resolve_object(&document.objects, &items[0]).ok().and_then(PdfObject::as_name) != Some("Indexed")
-    {
+    if items.len() < 4 || resolve_object(&document.objects, &items[0]).ok().and_then(PdfObject::as_name) != Some("Indexed") {
         return Err("/ColorSpace array is not /Indexed".to_string());
     }
 

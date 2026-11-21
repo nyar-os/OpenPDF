@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
-    CreateRequest, DocumentArrange, MetadataPatch, arrange, capabilities, create, extract_images, extract_text, inspect,
-    merge, set_metadata, split,
+    CreateRequest, DocumentArrange, MetadataPatch, arrange, capabilities, create, extract_images, extract_text, inspect, merge,
+    set_metadata, split,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -698,12 +698,8 @@ fn arrange_removes_then_orders_and_rotates() {
     let path = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
     let out = workspace.path("arranged.pdf");
 
-    let report = arrange(
-        &path,
-        &out,
-        &DocumentArrange { order: Some(vec![3, 1]), rotate: Some(90), remove: Some(vec![2]) },
-    )
-    .expect("arrange");
+    let report = arrange(&path, &out, &DocumentArrange { order: Some(vec![3, 1]), rotate: Some(90), remove: Some(vec![2]) })
+        .expect("arrange");
     assert_eq!(report.pages, 2);
 
     let inspected = inspect(&out).expect("inspect arranged");
@@ -767,10 +763,7 @@ fn arrange_rejects_invalid_indices_duplicates_and_empty_results() {
 fn arrange_on_corrupt_input_reports_format_invalid_without_panicking() {
     let workspace = Workspace::new();
     let broken = workspace.write("broken-arrange.pdf", b"not a PDF");
-    assert_invalid(
-        arrange(&broken, &workspace.path("out.pdf"), &DocumentArrange::default()),
-        "format/invalid",
-    );
+    assert_invalid(arrange(&broken, &workspace.path("out.pdf"), &DocumentArrange::default()), "format/invalid");
 }
 
 #[test]
@@ -814,10 +807,7 @@ fn set_metadata_overrides_preserves_and_deletes_fields() {
 fn set_metadata_on_corrupt_input_reports_format_invalid_without_panicking() {
     let workspace = Workspace::new();
     let broken = workspace.write("broken-metadata.pdf", b"%PDF-1.7\nnot really");
-    assert_invalid(
-        set_metadata(&broken, &workspace.path("out.pdf"), &MetadataPatch::default()),
-        "format/invalid",
-    );
+    assert_invalid(set_metadata(&broken, &workspace.path("out.pdf"), &MetadataPatch::default()), "format/invalid");
 }
 
 fn flate_image(width: u32, height: u32, color_space: &str, bits: u8, decode: &str, data: &[u8]) -> Vec<u8> {

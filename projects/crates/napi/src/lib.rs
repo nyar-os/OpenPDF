@@ -102,8 +102,7 @@ fn pdf_arrange(ctx: CallContext) -> Result<JsValue> {
     let raw = text(&ctx, 2)?;
     let ops: open_pdf_core::DocumentArrange =
         serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
-    let report =
-        open_pdf_core::arrange(std::path::Path::new(&path), std::path::Path::new(&out), &ops).map_err(failure)?;
+    let report = open_pdf_core::arrange(std::path::Path::new(&path), std::path::Path::new(&out), &ops).map_err(failure)?;
     respond(&ctx, &report)
 }
 
