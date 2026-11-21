@@ -379,23 +379,23 @@ fn encrypted_xref_stream_is_still_rejected() {
 }
 
 #[test]
-fn unsupported_content_filter_is_reported_as_a_loss() {
+fn unsupported_image_filter_in_a_content_stream_is_reported_as_a_loss() {
     let workspace = Workspace::new();
-    let path = workspace.path("lzw.pdf");
+    let path = workspace.path("dct.pdf");
     let bytes = classic_pdf(&[
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>",
-        "<< /Length 5 /Filter /LZWDecode >>\nstream\nabcde\nendstream",
+        "<< /Length 5 /Filter /DCTDecode >>\nstream\nabcde\nendstream",
     ]);
-    fs::write(&path, bytes).expect("write LZW PDF");
+    fs::write(&path, bytes).expect("write DCT PDF");
 
-    let report = inspect(&path).expect("inspect LZW PDF");
+    let report = inspect(&path).expect("inspect DCT PDF");
     assert_eq!(report.pages, 1);
-    let extracted = extract_text(&path).expect("extract LZW PDF");
+    let extracted = extract_text(&path).expect("extract DCT PDF");
     assert_eq!(extracted.losses.len(), 1);
     assert_eq!(extracted.losses[0].code, "content/filter-unsupported");
-    assert!(extracted.losses[0].message.contains("LZWDecode"), "{:?}", extracted.losses[0].message);
+    assert!(extracted.losses[0].message.contains("DCTDecode"), "{:?}", extracted.losses[0].message);
 }
 
 fn classic_pdf(objects: &[&str]) -> Vec<u8> {

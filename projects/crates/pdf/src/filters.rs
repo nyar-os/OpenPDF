@@ -1,8 +1,10 @@
 //! Stream filter decoding.
 //!
-//! Only `/FlateDecode` is implemented. Every other filter is reported as
-//! unsupported and the stream keeps its raw bytes in the object table, so a
-//! caller can never mistake a guess for decoded data.
+//! `/FlateDecode`, `/LZWDecode`, `/ASCIIHexDecode`, `/ASCII85Decode` and
+//! `/RunLengthDecode` are implemented, including the `/DecodeParms` those
+//! filters define. Image codecs (`/DCTDecode`, `/JBIG2Decode`,
+//! `/CCITTFaxDecode`, `/JPXDecode`) stay unsupported and are reported instead
+//! of approximated, so a caller can never mistake a guess for decoded data.
 
 use std::collections::BTreeMap;
 
@@ -31,6 +33,10 @@ pub(crate) fn decode(stream: &PdfStream, objects: &BTreeMap<u32, PdfObject>) -> 
         let parameters = parameters.get(index).and_then(Option::as_ref);
         match filter.as_str() {
             "FlateDecode" | "Fl" => data = decode_flate(&data, parameters, objects)?,
+            "LZWDecode" | "LZW" => data = decode_lzw(&data, parameters, objects)?,
+            "ASCIIHexDecode" | "AHx" => data = decode_ascii_hex(&data)?,
+            "ASCII85Decode" | "A85" => data = decode_ascii85(&data)?,
+            "RunLengthDecode" | "RL" => data = decode_run_length(&data)?,
             "none" => {}
             other => {
                 return Err(unsupported(format!("stream filter /{other} is not supported, raw bytes are preserved")));
@@ -38,6 +44,14 @@ pub(crate) fn decode(stream: &PdfStream, objects: &BTreeMap<u32, PdfObject>) -> 
         }
     }
     Ok(data)
+}
+
+/// The `/Filter` chain of a stream as decoded names, without decoding any data.
+///
+/// Image extraction needs the chain to decide whether a payload is a JPEG or a
+/// PNG source; a malformed `/Filter` entry is still an error.
+pub(crate) fn filter_chain(stream: &PdfStream, objects: &BTreeMap<u32, PdfObject>) -> Result<Vec<String>> {
+    filter_names(&stream.dict, objects)
 }
 
 fn filter_names(dict: &Dict, objects: &BTreeMap<u32, PdfObject>) -> Result<Vec<String>> {
@@ -102,6 +116,228 @@ fn decode_flate(input: &[u8], parameters: Option<&Dict>, objects: &BTreeMap<u32,
     let limits = CodecLimits::new().with_max_output_bytes(MAX_STREAM_BYTES);
     let facts = Zlib::decode(input, limits).map_err(|error| invalid(format!("FlateDecode failed: {error}")))?;
     apply_predictor(facts.value, parameters, objects)
+}
+
+/// `/ASCIIHexDecode`: one hex pair per byte, whitespace ignored, `>` ends the
+/// data and an odd trailing digit is padded with zero.
+fn decode_ascii_hex(input: &[u8]) -> Result<Vec<u8>> {
+    let mut output = Vec::with_capacity(input.len() / 2 + 1);
+    let mut high: Option<u8> = None;
+    for &byte in input {
+        if is_filter_whitespace(byte) {
+            continue;
+        }
+        if byte == b'>' {
+            break;
+        }
+        let digit = hex_digit(byte).ok_or_else(|| invalid(format!("ASCIIHexDecode found invalid byte 0x{byte:02X}")))?;
+        match high.take() {
+            Some(previous) => {
+                output.push(previous * 16 + digit);
+                ensure_output_size(output.len())?;
+            }
+            None => high = Some(digit),
+        }
+    }
+    if let Some(previous) = high {
+        output.push(previous * 16);
+    }
+    Ok(output)
+}
+
+/// `/ASCII85Decode`: five base-85 characters per four bytes, `z` for four zero
+/// bytes, `~>` for the end of data.
+fn decode_ascii85(input: &[u8]) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    let mut group = [0u8; 5];
+    let mut count = 0usize;
+    let mut index = 0usize;
+    while index < input.len() {
+        let byte = input[index];
+        index += 1;
+        if is_filter_whitespace(byte) {
+            continue;
+        }
+        if byte == b'~' {
+            break;
+        }
+        if byte == b'z' {
+            if count != 0 {
+                return Err(invalid("ASCII85Decode 'z' appears inside a group"));
+            }
+            output.extend_from_slice(&[0, 0, 0, 0]);
+            ensure_output_size(output.len())?;
+            continue;
+        }
+        if !(b'!'..=b'u').contains(&byte) {
+            return Err(invalid(format!("ASCII85Decode found invalid byte 0x{byte:02X}")));
+        }
+        group[count] = byte - b'!';
+        count += 1;
+        if count == 5 {
+            append_ascii85_group(&mut output, &group, 4)?;
+            count = 0;
+        }
+    }
+    if count > 0 {
+        if count == 1 {
+            return Err(invalid("ASCII85Decode has a one-character trailing group"));
+        }
+        for slot in group.iter_mut().skip(count) {
+            *slot = 84;
+        }
+        append_ascii85_group(&mut output, &group, count - 1)?;
+    }
+    Ok(output)
+}
+
+fn append_ascii85_group(output: &mut Vec<u8>, group: &[u8; 5], bytes: usize) -> Result<()> {
+    let value = group.iter().fold(0u64, |current, digit| current * 85 + u64::from(*digit));
+    if bytes == 4 && value > u64::from(u32::MAX) {
+        return Err(invalid("ASCII85Decode group overflows four bytes"));
+    }
+    let value = value as u32;
+    output.extend_from_slice(&value.to_be_bytes()[..bytes]);
+    ensure_output_size(output.len())
+}
+
+/// `/RunLengthDecode`: `0..=127` starts a literal run, `129..=255` repeats the
+/// next byte, `128` ends the data.
+fn decode_run_length(input: &[u8]) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    let mut index = 0usize;
+    while let Some(&header) = input.get(index) {
+        index += 1;
+        match header {
+            128 => return Ok(output),
+            0..=127 => {
+                let count = usize::from(header) + 1;
+                let end = index
+                    .checked_add(count)
+                    .filter(|end| *end <= input.len())
+                    .ok_or_else(|| invalid("RunLengthDecode literal run is truncated"))?;
+                output.extend_from_slice(&input[index..end]);
+                index = end;
+            }
+            other => {
+                let byte = *input.get(index).ok_or_else(|| invalid("RunLengthDecode repeat run is truncated"))?;
+                index += 1;
+                output.extend(std::iter::repeat_n(byte, 257 - usize::from(other)));
+            }
+        }
+        ensure_output_size(output.len())?;
+    }
+    Ok(output)
+}
+
+/// `/LZWDecode` with PDF's variable code width and `/EarlyChange` (default 1).
+fn decode_lzw(input: &[u8], parameters: Option<&Dict>, objects: &BTreeMap<u32, PdfObject>) -> Result<Vec<u8>> {
+    let early_change = match parameters.and_then(|dict| integer(dict, "EarlyChange", objects)).unwrap_or(1) {
+        0 => 0usize,
+        1 => 1usize,
+        other => return Err(unsupported(format!("LZWDecode /EarlyChange {other} is not supported"))),
+    };
+
+    let mut table: Vec<Vec<u8>> = (0..=255).map(|byte| vec![byte]).collect();
+    table.push(Vec::new()); // 256: clear table.
+    table.push(Vec::new()); // 257: end of data.
+
+    let mut reader = BitReader::new(input);
+    let mut width = 9usize;
+    let mut output = Vec::new();
+    let mut previous: Option<Vec<u8>> = None;
+
+    loop {
+        let Some(code) = reader.read(width) else {
+            if reader.remaining_bits_are_zero() {
+                break;
+            }
+            return Err(invalid("LZWDecode stream ends inside a code"));
+        };
+        match code {
+            256 => {
+                table.truncate(258);
+                width = 9;
+                previous = None;
+            }
+            257 => break,
+            _ => {
+                let entry = if usize::from(code) < table.len() {
+                    table[usize::from(code)].clone()
+                } else if usize::from(code) == table.len() {
+                    let previous = previous.as_ref().ok_or_else(|| invalid(format!("LZWDecode code {code} has no prefix")))?;
+                    let mut entry = previous.clone();
+                    entry.push(previous[0]);
+                    entry
+                } else {
+                    return Err(invalid(format!("LZWDecode code {code} is outside the table")));
+                };
+                output.extend_from_slice(&entry);
+                ensure_output_size(output.len())?;
+                if let Some(previous) = previous.as_ref()
+                    && table.len() < 4096
+                {
+                    let mut next = previous.clone();
+                    next.push(entry[0]);
+                    table.push(next);
+                }
+                previous = Some(entry);
+                if width < 12 && table.len() + early_change >= (1 << width) {
+                    width += 1;
+                }
+            }
+        }
+    }
+    apply_predictor(output, parameters, objects)
+}
+
+struct BitReader<'a> {
+    data: &'a [u8],
+    bit: usize,
+}
+
+impl<'a> BitReader<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Self { data, bit: 0 }
+    }
+
+    fn read(&mut self, width: usize) -> Option<u16> {
+        if self.bit.checked_add(width)? > self.data.len().checked_mul(8)? {
+            return None;
+        }
+        let mut value = 0u16;
+        for _ in 0..width {
+            let byte = self.data[self.bit / 8];
+            let bit = (byte >> (7 - (self.bit % 8))) & 1;
+            value = (value << 1) | u16::from(bit);
+            self.bit += 1;
+        }
+        Some(value)
+    }
+
+    fn remaining_bits_are_zero(&self) -> bool {
+        (self.bit..self.data.len() * 8).all(|position| (self.data[position / 8] >> (7 - (position % 8))) & 1 == 0)
+    }
+}
+
+fn is_filter_whitespace(byte: u8) -> bool {
+    matches!(byte, 0 | 9 | 10 | 12 | 13 | 32)
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn ensure_output_size(length: usize) -> Result<()> {
+    if length as u64 > MAX_STREAM_BYTES {
+        return Err(invalid("decoded stream exceeds the 64 MiB limit"));
+    }
+    Ok(())
 }
 
 fn apply_predictor(data: Vec<u8>, parameters: Option<&Dict>, objects: &BTreeMap<u32, PdfObject>) -> Result<Vec<u8>> {
