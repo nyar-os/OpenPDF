@@ -66,20 +66,6 @@ fn assemble(objects: &[&str]) -> Vec<u8> {
     output
 }
 
-fn assemble_xref_stream(objects: &[&str], xref_object: u32) -> Vec<u8> {
-    let mut output = b"%PDF-1.7\n".to_vec();
-    let mut target = 0;
-    for (index, body) in objects.iter().enumerate() {
-        let number = index as u32 + 1;
-        if number == xref_object {
-            target = output.len();
-        }
-        output.extend_from_slice(format!("{number} 0 obj\n{body}\nendobj\n").as_bytes());
-    }
-    output.extend_from_slice(format!("startxref\n{target}\n%%EOF\n").as_bytes());
-    output
-}
-
 #[test]
 fn create_then_inspect_reports_pages_title_and_a4_geometry() {
     let workspace = Workspace::new();
@@ -249,18 +235,36 @@ fn inspect_reads_nested_outlines_and_inherited_page_attributes() {
 }
 
 #[test]
-fn xref_stream_is_rejected_as_unsupported() {
+fn xref_stream_with_an_empty_page_tree_is_accepted() {
     let workspace = Workspace::new();
     let path = workspace.path("xref-stream.pdf");
-    let bytes = assemble_xref_stream(
-        &[
-            "<< /Type /Catalog /Pages 2 0 R >>",
-            "<< /Type /Pages /Kids [] /Count 0 >>",
-            "<< /Type /XRef /Size 3 /W [1 2 1] /Root 1 0 R /Length 0 >>\nstream\nendstream",
-        ],
-        3,
-    );
-    fs::write(&path, bytes).expect("write xref stream PDF");
 
-    assert_invalid(inspect(&path), "format/unsupported");
+    let mut output = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for body in ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [] /Count 0 >>"] {
+        offsets.push(output.len());
+        output.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", offsets.len()).as_bytes());
+    }
+    let xref_offset = output.len();
+    let mut entries = Vec::new();
+    entries.extend_from_slice(&[0, 0, 0, 0]);
+    for offset in &offsets {
+        entries.push(1);
+        entries.extend_from_slice(&(*offset as u16).to_be_bytes());
+        entries.push(0);
+    }
+    entries.push(1);
+    entries.extend_from_slice(&(xref_offset as u16).to_be_bytes());
+    entries.push(0);
+    output.extend_from_slice(
+        format!("3 0 obj\n<< /Type /XRef /Size 4 /W [1 2 1] /Index [0 4] /Root 1 0 R /Length {} >>\nstream\n", entries.len())
+            .as_bytes(),
+    );
+    output.extend_from_slice(&entries);
+    output.extend_from_slice(b"\nendstream\nendobj\n");
+    output.extend_from_slice(format!("startxref\n{xref_offset}\n%%EOF\n").as_bytes());
+    fs::write(&path, output).expect("write xref stream PDF");
+
+    let report = inspect(&path).expect("inspect xref stream PDF");
+    assert_eq!(report.pages, 0);
 }

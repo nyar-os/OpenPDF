@@ -1,4 +1,5 @@
 use crate::error::{Result, invalid};
+use crate::filters;
 use crate::object::PdfObject;
 use crate::parse::{PageNode, ParsedDocument, Parser, decode_text_string, is_delimiter, is_whitespace, resolve_object};
 
@@ -13,10 +14,10 @@ pub(crate) struct Loss {
     pub message: String,
 }
 
-/// Extracts visible text from uncompressed content streams.
+/// Extracts visible text from content streams decoded through their filters.
 ///
-/// Anything that needs a stream filter (Flate, LZW, images) is reported as a
-/// loss instead of being guessed. This is why the capability matrix calls text
+/// `/FlateDecode` is decoded in full. Every other filter is reported as a loss
+/// and keeps its raw bytes, which is why the capability matrix still calls text
 /// extraction partial rather than supported.
 pub(crate) fn extract(document: &ParsedDocument) -> Result<Extraction> {
     let mut pages = Vec::new();
@@ -26,15 +27,23 @@ pub(crate) fn extract(document: &ParsedDocument) -> Result<Extraction> {
         let streams = contents_of(document, page)?;
         let mut lines = Vec::new();
         for stream in streams {
-            let Some(bytes) = decodable(stream) else {
-                losses.push(Loss {
-                    code: "content/filter-unsupported".to_string(),
-                    page: number,
-                    message: "a content stream uses a filter this build does not decode".to_string(),
-                });
-                continue;
-            };
-            extract_stream(&bytes, &mut lines);
+            match filters::decode(stream, &document.objects) {
+                Ok(bytes) => extract_stream(&bytes, &mut lines),
+                Err(error) if error.code() == "format/unsupported" => {
+                    losses.push(Loss {
+                        code: "content/filter-unsupported".to_string(),
+                        page: number,
+                        message: error.message().to_string(),
+                    });
+                }
+                Err(error) => {
+                    losses.push(Loss {
+                        code: "content/filter-invalid".to_string(),
+                        page: number,
+                        message: error.message().to_string(),
+                    });
+                }
+            }
         }
         let text = lines.join("\n");
         if !text.is_empty() {
@@ -64,15 +73,6 @@ fn contents_of<'a>(document: &'a ParsedDocument, page: &'a PageNode) -> Result<V
         _ => return Err(invalid("/Contents is not a stream or an array of streams")),
     }
     Ok(streams)
-}
-
-fn decodable(stream: &crate::object::PdfStream) -> Option<Vec<u8>> {
-    match stream.dict.get("Filter") {
-        None => Some(stream.data.clone()),
-        Some(PdfObject::Array(items)) if items.is_empty() => Some(stream.data.clone()),
-        Some(PdfObject::Name(name)) if name == "none" => Some(stream.data.clone()),
-        _ => None,
-    }
 }
 
 enum Token {

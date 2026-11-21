@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use crate::error::{Result, invalid, unsupported};
+use crate::filters;
 use crate::object::{Dict, PdfObject, PdfStream};
 
 /// A parsed PDF document: every body object plus the resolved page tree.
@@ -70,14 +71,36 @@ pub(crate) fn resolve_object<'a>(objects: &'a BTreeMap<u32, PdfObject>, object: 
 /// Loads and validates a PDF byte buffer.
 pub(crate) fn parse_document(data: &[u8]) -> Result<ParsedDocument> {
     let (version, scan_from) = read_header(data)?;
-    let objects = scan_objects(data, scan_from)?;
-    let startxref = read_startxref(data)?;
-    let trailer = read_trailer(data, startxref)?;
 
-    if trailer.contains_key("Encrypt") {
-        return Err(unsupported("xref streams / encrypted PDF not supported: encrypted PDF"));
+    // The first pass has no length hints, so a stream whose `/Length` is an
+    // indirect reference falls back to scanning for `endstream`. Its object
+    // table still exposes every direct `/Length` value for the second pass.
+    let preliminary = scan_objects(data, scan_from, &BTreeMap::new())?;
+    let lengths = collect_lengths(&preliminary);
+    let mut objects = if lengths.is_empty() { preliminary } else { scan_objects(data, scan_from, &lengths)? };
+
+    let startxref = read_startxref(data)?;
+    let xref = read_xref(data, startxref, &lengths, &objects)?;
+    if xref.trailer.contains_key("Encrypt") {
+        return Err(unsupported("encrypted PDF is not supported"));
     }
 
+    load_object_streams(&mut objects, &xref.object_streams)?;
+
+    // A `/Length` target may itself live in an object stream. Once those are
+    // loaded the value is known, so the body is scanned once more with the
+    // complete hint table.
+    let complete_lengths = collect_lengths(&objects);
+    if complete_lengths.len() > lengths.len() {
+        let mut refined = scan_objects(data, scan_from, &complete_lengths)?;
+        for (number, object) in std::mem::take(&mut objects) {
+            refined.entry(number).or_insert(object);
+        }
+        load_object_streams(&mut refined, &xref.object_streams)?;
+        objects = refined;
+    }
+
+    let trailer = xref.trailer;
     let root_reference = trailer.get("Root").ok_or_else(|| invalid("trailer has no /Root"))?;
     let root = match root_reference {
         PdfObject::Reference(number, _) => *number,
@@ -121,8 +144,8 @@ fn read_header(data: &[u8]) -> Result<(String, usize)> {
     Ok((version, position))
 }
 
-fn scan_objects(data: &[u8], from: usize) -> Result<BTreeMap<u32, PdfObject>> {
-    let mut parser = Parser::new(data);
+fn scan_objects(data: &[u8], from: usize, lengths: &BTreeMap<u32, u64>) -> Result<BTreeMap<u32, PdfObject>> {
+    let mut parser = Parser::with_lengths(data, lengths);
     parser.pos = from.min(data.len());
     let mut objects = BTreeMap::new();
     while parser.pos < data.len() {
@@ -148,6 +171,16 @@ fn scan_objects(data: &[u8], from: usize) -> Result<BTreeMap<u32, PdfObject>> {
     Ok(objects)
 }
 
+fn collect_lengths(objects: &BTreeMap<u32, PdfObject>) -> BTreeMap<u32, u64> {
+    objects
+        .iter()
+        .filter_map(|(number, object)| match object {
+            PdfObject::Integer(value) => u64::try_from(*value).ok().map(|value| (*number, value)),
+            _ => None,
+        })
+        .collect()
+}
+
 fn read_startxref(data: &[u8]) -> Result<usize> {
     let index = rfind_sub(data, b"startxref").ok_or_else(|| invalid("missing startxref"))?;
     let mut parser = Parser::new(data);
@@ -157,32 +190,181 @@ fn read_startxref(data: &[u8]) -> Result<usize> {
     usize::try_from(offset).map_err(|_| invalid("startxref offset does not fit in memory"))
 }
 
-fn read_trailer(data: &[u8], offset: usize) -> Result<Dict> {
+/// Trailer dictionary plus the object streams announced by type-2 entries.
+struct XrefInfo {
+    trailer: Dict,
+    object_streams: Vec<u32>,
+}
+
+fn read_xref(data: &[u8], offset: usize, lengths: &BTreeMap<u32, u64>, objects: &BTreeMap<u32, PdfObject>) -> Result<XrefInfo> {
     if offset >= data.len() {
         return Err(invalid("startxref points past the end of the file"));
     }
-    let mut parser = Parser::new(data);
+    let mut parser = Parser::with_lengths(data, lengths);
     parser.pos = offset;
     parser.skip_ws();
     if parser.take_keyword(b"xref") {
-        return read_classic_trailer(&mut parser);
+        let trailer = read_classic_trailer(&mut parser)?;
+        return Ok(XrefInfo { trailer, object_streams: Vec::new() });
     }
 
-    // A startxref target that is an object rather than the `xref` keyword is a
-    // cross-reference stream, which this engine deliberately does not decode.
     if parser.try_indirect_header()?.is_some() {
         let object = parser.parse_object(0)?;
-        let object_type = match &object {
-            PdfObject::Dictionary(dict) => dict.get("Type").and_then(PdfObject::as_name),
-            PdfObject::Stream(stream) => stream.dict.get("Type").and_then(PdfObject::as_name),
-            _ => None,
+        let PdfObject::Stream(stream) = object else {
+            return Err(invalid("startxref object is not a cross-reference stream"));
         };
-        if object_type == Some("XRef") {
-            return Err(unsupported("xref streams / encrypted PDF not supported: cross-reference stream"));
+        if stream.dict.get("Type").and_then(PdfObject::as_name) != Some("XRef") {
+            return Err(invalid("startxref object is not a cross-reference stream"));
         }
-        return Err(invalid("startxref does not point to a cross-reference table"));
+        return read_xref_stream(stream, objects);
     }
     Err(invalid("startxref does not point to a cross-reference table"))
+}
+
+fn read_xref_stream(stream: PdfStream, objects: &BTreeMap<u32, PdfObject>) -> Result<XrefInfo> {
+    let decoded = filters::decode(&stream, objects)?;
+    let dict = &stream.dict;
+
+    let widths = dict.get("W").ok_or_else(|| invalid("cross-reference stream has no /W"))?;
+    let widths = widths.as_array().ok_or_else(|| invalid("cross-reference stream /W is not an array"))?;
+    if widths.len() < 3 {
+        return Err(invalid("cross-reference stream /W must hold three widths"));
+    }
+    let mut columns = [0usize; 3];
+    for (index, slot) in columns.iter_mut().enumerate() {
+        let width = widths[index].as_i64().ok_or_else(|| invalid("cross-reference stream /W holds a non-integer"))?;
+        *slot = usize::try_from(width).map_err(|_| invalid("cross-reference stream width is invalid"))?;
+        if *slot > 8 {
+            return Err(invalid("cross-reference stream field is wider than 8 bytes"));
+        }
+    }
+    let row_width = columns.iter().sum::<usize>();
+    if row_width == 0 || row_width > 24 {
+        return Err(invalid("cross-reference stream row width is invalid"));
+    }
+
+    let size = dict.get("Size").and_then(PdfObject::as_i64).ok_or_else(|| invalid("cross-reference stream has no /Size"))?;
+    let size = usize::try_from(size).map_err(|_| invalid("cross-reference stream /Size is invalid"))?;
+    let sections = match dict.get("Index") {
+        None => vec![(0usize, size)],
+        Some(value) => {
+            let items = value.as_array().ok_or_else(|| invalid("cross-reference stream /Index is not an array"))?;
+            if items.len() % 2 != 0 {
+                return Err(invalid("cross-reference stream /Index must hold pairs"));
+            }
+            let mut sections = Vec::with_capacity(items.len() / 2);
+            for pair in items.chunks_exact(2) {
+                let start = pair[0].as_i64().ok_or_else(|| invalid("cross-reference stream /Index holds a non-integer"))?;
+                let count = pair[1].as_i64().ok_or_else(|| invalid("cross-reference stream /Index holds a non-integer"))?;
+                let start = usize::try_from(start).map_err(|_| invalid("cross-reference stream /Index start is invalid"))?;
+                let count = usize::try_from(count).map_err(|_| invalid("cross-reference stream /Index count is invalid"))?;
+                if count > 10_000_000 {
+                    return Err(invalid("cross-reference stream section is too large"));
+                }
+                sections.push((start, count));
+            }
+            sections
+        }
+    };
+
+    let total_entries: usize = sections.iter().map(|(_, count)| count).sum();
+    let required = total_entries.checked_mul(row_width).ok_or_else(|| invalid("cross-reference stream is too large"))?;
+    if decoded.len() < required {
+        return Err(invalid("cross-reference stream is truncated"));
+    }
+
+    let mut object_streams = Vec::new();
+    let mut position = 0usize;
+    for (number, count) in sections {
+        for index in 0..count {
+            let row = &decoded[position..position + row_width];
+            position += row_width;
+            let kind = big_endian(row, 0, columns[0]);
+            let field2 = big_endian(row, columns[0], columns[1]);
+            let field3 = big_endian(row, columns[0] + columns[1], columns[2]);
+            let entry_type = if columns[0] == 0 { 1 } else { kind };
+            let number = number.saturating_add(index);
+            match entry_type {
+                0 => {} // Free.
+                1 => {} // Whole-file object; the body scan already found it.
+                2 => {
+                    let stream_number =
+                        u32::try_from(field2).map_err(|_| invalid("object stream number does not fit in 32 bits"))?;
+                    let _ = field3;
+                    if !object_streams.contains(&stream_number) {
+                        object_streams.push(stream_number);
+                    }
+                }
+                other => return Err(invalid(format!("cross-reference stream entry {number} has invalid type {other}"))),
+            }
+        }
+    }
+
+    Ok(XrefInfo { trailer: stream.dict, object_streams })
+}
+
+fn big_endian(row: &[u8], offset: usize, width: usize) -> u64 {
+    let mut value = 0u64;
+    for byte in &row[offset..offset + width] {
+        value = (value << 8) | u64::from(*byte);
+    }
+    value
+}
+
+fn load_object_streams(objects: &mut BTreeMap<u32, PdfObject>, numbers: &[u32]) -> Result<()> {
+    for number in numbers {
+        let stream = match objects.get(number) {
+            Some(PdfObject::Stream(stream)) => stream.clone(),
+            Some(_) => return Err(invalid(format!("object stream {number} is not a stream"))),
+            None => return Err(invalid(format!("object stream {number} is missing"))),
+        };
+        let decoded = filters::decode(&stream, objects)?;
+        read_object_stream(&decoded, &stream.dict, objects)?;
+    }
+    Ok(())
+}
+
+fn read_object_stream(decoded: &[u8], dict: &Dict, objects: &mut BTreeMap<u32, PdfObject>) -> Result<()> {
+    if dict.get("Type").and_then(PdfObject::as_name) != Some("ObjStm") {
+        return Err(invalid("object stream is not marked /Type /ObjStm"));
+    }
+    let count = dict.get("N").and_then(PdfObject::as_i64).ok_or_else(|| invalid("object stream has no /N"))?;
+    let first = dict.get("First").and_then(PdfObject::as_i64).ok_or_else(|| invalid("object stream has no /First"))?;
+    let count = usize::try_from(count).map_err(|_| invalid("object stream /N is invalid"))?;
+    let first = usize::try_from(first).map_err(|_| invalid("object stream /First is invalid"))?;
+    if count > 1_000_000 {
+        return Err(invalid("object stream declares too many objects"));
+    }
+    if first > decoded.len() {
+        return Err(invalid("object stream /First is past the decoded data"));
+    }
+
+    let mut parser = Parser::new(decoded);
+    let mut pairs = Vec::with_capacity(count);
+    for _ in 0..count {
+        parser.skip_ws();
+        let number = parser.take_unsigned()?.ok_or_else(|| invalid("object stream header is truncated"))?;
+        parser.skip_ws();
+        let offset = parser.take_unsigned()?.ok_or_else(|| invalid("object stream header is truncated"))?;
+        let number = u32::try_from(number).map_err(|_| invalid("object stream object number is too large"))?;
+        let offset = usize::try_from(offset).map_err(|_| invalid("object stream object offset is too large"))?;
+        pairs.push((number, offset));
+    }
+
+    for (number, offset) in pairs {
+        let start = first.checked_add(offset).ok_or_else(|| invalid("object stream offset overflows"))?;
+        if start > decoded.len() {
+            return Err(invalid("object stream object offset is past the decoded data"));
+        }
+        let mut parser = Parser::new(decoded);
+        parser.pos = start;
+        let object = parser.parse_object(0)?;
+        if matches!(object, PdfObject::Stream(_)) {
+            return Err(invalid("object streams may not contain stream objects"));
+        }
+        objects.insert(number, object);
+    }
+    Ok(())
 }
 
 fn read_classic_trailer(parser: &mut Parser<'_>) -> Result<Dict> {
@@ -403,11 +585,16 @@ fn pdf_doc_char(byte: u8) -> char {
 pub(crate) struct Parser<'a> {
     pub data: &'a [u8],
     pub pos: usize,
+    length_hints: Option<&'a BTreeMap<u32, u64>>,
 }
 
 impl<'a> Parser<'a> {
     pub(crate) fn new(data: &'a [u8]) -> Self {
-        Self { data, pos: 0 }
+        Self { data, pos: 0, length_hints: None }
+    }
+
+    pub(crate) fn with_lengths(data: &'a [u8], lengths: &'a BTreeMap<u32, u64>) -> Self {
+        Self { data, pos: 0, length_hints: Some(lengths) }
     }
 
     pub(crate) fn peek(&self) -> Option<u8> {
@@ -490,7 +677,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn take_unsigned(&mut self) -> Result<Option<u64>> {
+    pub(crate) fn take_unsigned(&mut self) -> Result<Option<u64>> {
         let start = self.pos;
         let mut value: u64 = 0;
         while let Some(byte) = self.peek() {
@@ -755,7 +942,13 @@ impl<'a> Parser<'a> {
         }
         let stream_start = self.pos;
 
-        let declared = dict.get("Length").and_then(PdfObject::as_i64).and_then(|length| usize::try_from(length).ok());
+        let declared = match dict.get("Length") {
+            Some(PdfObject::Integer(length)) => usize::try_from(*length).ok(),
+            Some(PdfObject::Reference(number, _)) => {
+                self.length_hints.and_then(|lengths| lengths.get(number)).and_then(|length| usize::try_from(*length).ok())
+            }
+            _ => None,
+        };
         if let Some(length) = declared
             && let Some(end) = stream_start.checked_add(length)
             && end <= self.data.len()

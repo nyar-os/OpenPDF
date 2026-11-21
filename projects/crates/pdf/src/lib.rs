@@ -1,9 +1,10 @@
 //! Pure-Rust PDF engine for OpenPDF.
 //!
-//! The crate implements a classic PDF 1.7 reader and writer: it parses the
-//! object table, page tree, metadata and outlines, and writes fresh files for
-//! creation, merging and splitting. It intentionally refuses cross-reference
-//! streams and encrypted files instead of decoding them.
+//! The crate implements a PDF 1.7 reader and writer: it parses the object
+//! table, page tree, metadata and outlines, decodes Flate-compressed streams,
+//! and writes fresh files for creation, merging and splitting. Cross-reference
+//! streams and object streams are supported. Encrypted files and stream filters
+//! other than `/FlateDecode` are refused instead of being guessed.
 //!
 //! Every malformed input becomes a [`ServiceError`]; no entry point panics.
 
@@ -12,6 +13,7 @@
 mod create;
 mod error;
 mod extract;
+mod filters;
 mod object;
 mod parse;
 mod writer;
@@ -241,26 +243,37 @@ pub fn merge(inputs: &[PathBuf], out: &Path, overwrite: bool, title: Option<&str
 pub fn split(path: &Path, ranges: &str, out_dir: &Path) -> Result<SplitReport> {
     let document = load_document(path)?;
     let ranges = parse_ranges(ranges, document.pages.len())?;
-    fs::create_dir_all(out_dir).map_err(|error| write_error(format!("cannot create {}: {error}", out_dir.display())))?;
-    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("document");
-
+    prepare_out_dir(out_dir)?;
+    let stem = document_stem(path);
     let mut documents = Vec::with_capacity(ranges.len());
     for (start, end) in ranges {
-        let mut writer = DocWriter::new();
-        let mut map = BTreeMap::new();
-        let mut pages = Vec::new();
-        for page in document.pages.iter().take(end).skip(start - 1) {
-            pages.push(copy_page(&mut writer, &document, &mut map, page)?);
-        }
-        let info = copy_info(&mut writer, &document, &mut map, None)?;
-        let bytes = finish_document(&mut writer, &pages, info)?;
-
-        let name = if start == end { format!("{stem}-p{start}.pdf") } else { format!("{stem}-p{start}-{end}.pdf") };
-        let target = out_dir.join(name);
-        write_file(&target, &bytes, true)?;
-        documents.push(SplitPart { path: target.display().to_string(), pages: pages.len() });
+        documents.push(write_part(&document, out_dir, &stem, start, end)?);
     }
     Ok(SplitReport { documents })
+}
+
+fn prepare_out_dir(out_dir: &Path) -> Result<()> {
+    fs::create_dir_all(out_dir).map_err(|error| write_error(format!("cannot create {}: {error}", out_dir.display())))
+}
+
+fn document_stem(path: &Path) -> String {
+    path.file_stem().and_then(|value| value.to_str()).unwrap_or("document").to_string()
+}
+
+fn write_part(document: &ParsedDocument, out_dir: &Path, stem: &str, start: usize, end: usize) -> Result<SplitPart> {
+    let mut writer = DocWriter::new();
+    let mut map = BTreeMap::new();
+    let mut pages = Vec::new();
+    for page in document.pages.iter().take(end).skip(start - 1) {
+        pages.push(copy_page(&mut writer, document, &mut map, page)?);
+    }
+    let info = copy_info(&mut writer, document, &mut map, None)?;
+    let bytes = finish_document(&mut writer, &pages, info)?;
+
+    let name = if start == end { format!("{stem}-p{start}.pdf") } else { format!("{stem}-p{start}-{end}.pdf") };
+    let target = out_dir.join(name);
+    write_file(&target, &bytes, true)?;
+    Ok(SplitPart { path: target.display().to_string(), pages: pages.len() })
 }
 
 /// Creates a new PDF with one Helvetica text page per request entry.
@@ -276,10 +289,11 @@ pub fn create(request: &CreateRequest) -> Result<CreateReport> {
     Ok(CreateReport { path: request.out.display().to_string(), pages: request.pages.len(), bytes: bytes.len() })
 }
 
-/// Extracts text from uncompressed content streams.
+/// Extracts text from content streams decoded through their filters.
 ///
-/// Compressed streams are reported in [`ExtractReport::losses`] instead of
-/// being approximated; see [`capabilities`] for the disclosed support level.
+/// `/FlateDecode` is decoded. Unsupported filters are reported in
+/// [`ExtractReport::losses`] instead of being approximated; see
+/// [`capabilities`] for the disclosed support level.
 pub fn extract_text(path: &Path) -> Result<ExtractReport> {
     let document = load_document(path)?;
     let extraction = extract::extract(&document)?;
@@ -305,7 +319,19 @@ pub fn capabilities() -> serde_json::Value {
             "pdf": {
                 "import": "partial",
                 "extract": "partial",
-                "export": "partial"
+                "export": "partial",
+                "structures": {
+                    "classicXref": "supported",
+                    "xrefStream": "supported",
+                    "objectStream": "supported",
+                    "encrypted": "unsupported"
+                },
+                "filters": {
+                    "flateDecode": "supported",
+                    "pngPredictor": "supported",
+                    "tiffPredictor": "supported",
+                    "other": "unsupported"
+                }
             }
         },
         "operations": {
