@@ -1,0 +1,21 @@
+{
+    "cli": {
+        "intro": "OpenPDF — create, inspect, merge, split and extract PDFs without external tools.",
+        "cmd": {
+            "capabilities": "Print what this build supports, honestly",
+            "inspect": "Show version, pages, metadata, page sizes and outlines",
+            "merge": "Concatenate PDF files in argument order",
+            "split": "Write one file per page range",
+            "create": "Create a PDF with Helvetica text pages",
+            "extract-text": "Extract text from uncompressed content streams"
+        },
+        "opt": {
+            "out": "Output file",
+            "title": "Document title",
+            "overwrite": "Replace the output file when it already exists",
+            "out-dir": "Directory for split files",
+            "ranges": "Comma-separated 1-based ranges, e.g. 1-5,10,15-20",
+            "page": "Page text; use | for a line break (repeatable)"
+        }
+    }
+}

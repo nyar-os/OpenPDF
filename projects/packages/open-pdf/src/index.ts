@@ -1,0 +1,62 @@
+/**
+ * Public SDK of `@wae/open-pdf`.
+ *
+ * The API is imperative: there is no open document handle and no read/write
+ * lifecycle to manage. Call an operation, get a report back.
+ */
+
+import * as service from './service.js';
+import type {
+    CreateReport,
+    CreateRequest,
+    ExtractReport,
+    MergeOptions,
+    MergeReport,
+    PdfCapabilities,
+    PdfInspectReport,
+    SplitReport,
+} from './types.js';
+
+export { OpenPdfError, NotImplementedError, errorCodes, isOpenPdfError } from './errors.js';
+export type { OpenPdfErrorCode, OpenPdfErrorDetails, OpenPdfErrorOptions } from './errors.js';
+export { documentFormats, formatFromPath, formatInfo, isPdfPath } from './formats.js';
+export type { PdfFormat, PdfFormatInfo } from './formats.js';
+export type * from './types.js';
+
+/** Function collection mirroring the native surface with a class-shaped facade. */
+export class OpenPDF {
+    /** Reports the installed addon version. */
+    static version(): string {
+        return service.version();
+    }
+
+    /** Reads the capability matrix of the installed addon. */
+    static capabilities(): PdfCapabilities {
+        return service.capabilities();
+    }
+
+    /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
+    static inspect(path: string): PdfInspectReport {
+        return service.inspect(path);
+    }
+
+    /** Concatenates PDF files in the given order. */
+    static merge(inputs: readonly string[], out: string, options: MergeOptions = {}): MergeReport {
+        return service.merge(inputs, out, options);
+    }
+
+    /** Splits one PDF into files selected by 1-based ranges. */
+    static split(path: string, ranges: string, outDir: string): SplitReport {
+        return service.split(path, ranges, outDir);
+    }
+
+    /** Creates a PDF with one Helvetica text page per request entry. */
+    static create(request: CreateRequest): CreateReport {
+        return service.create(request);
+    }
+
+    /** Extracts text from uncompressed content streams. */
+    static extractText(path: string): ExtractReport {
+        return service.extractText(path);
+    }
+}
