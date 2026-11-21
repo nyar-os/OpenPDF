@@ -15,8 +15,10 @@ import type {
     ArrangeRequest,
     Bookmark,
     BookmarkReport,
+    CropBox,
     CreateReport,
     CreateRequest,
+    DeletePagesReport,
     ExtractedImage,
     ExtractReport,
     FormFillReport,
@@ -26,7 +28,9 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    RotatePagesReport,
     SetMetadataReport,
+    SetPageBoxesReport,
     SplitReport,
     StampReport,
     StampRequest,
@@ -85,6 +89,33 @@ export class OpenPDF {
     /** Reorders, removes and rotates pages into a new PDF. */
     async arrange(path: string, out: string, ops: ArrangeRequest = {}): Promise<ArrangeReport> {
         return service.arrange(path, out, ops);
+    }
+
+    /** Removes the selected pages into a new PDF. */
+    async deletePages(path: string, pages: string, out: string, overwrite = this.defaultOverwrite): Promise<DeletePagesReport> {
+        return service.deletePages(path, pages, out, overwrite);
+    }
+
+    /** Adds a clockwise rotation to the selected pages into a new PDF. */
+    async rotatePages(
+        path: string,
+        pages: string,
+        degrees: number,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<RotatePagesReport> {
+        return service.rotatePages(path, pages, degrees, out, overwrite);
+    }
+
+    /** Writes a `/CropBox` on the selected pages into a new PDF. */
+    async setPageBoxes(
+        path: string,
+        pages: string,
+        crop: CropBox,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<SetPageBoxesReport> {
+        return service.setPageBoxes(path, pages, crop, out, overwrite);
     }
 
     /** Copies every page while rewriting the information dictionary. */
@@ -155,6 +186,33 @@ export class OpenPDF {
     /** Reorders, removes and rotates pages into a new PDF. */
     static arrange(path: string, out: string, ops: ArrangeRequest = {}): ArrangeReport {
         return service.arrange(path, out, ops);
+    }
+
+    /** Removes the selected pages into a new PDF. */
+    static deletePages(path: string, pages: string, out: string, overwrite = false): DeletePagesReport {
+        return service.deletePages(path, pages, out, overwrite);
+    }
+
+    /** Adds a clockwise rotation to the selected pages into a new PDF. */
+    static rotatePages(
+        path: string,
+        pages: string,
+        degrees: number,
+        out: string,
+        overwrite = false,
+    ): RotatePagesReport {
+        return service.rotatePages(path, pages, degrees, out, overwrite);
+    }
+
+    /** Writes a `/CropBox` on the selected pages into a new PDF. */
+    static setPageBoxes(
+        path: string,
+        pages: string,
+        crop: CropBox,
+        out: string,
+        overwrite = false,
+    ): SetPageBoxesReport {
+        return service.setPageBoxes(path, pages, crop, out, overwrite);
     }
 
     /** Copies every page while rewriting the information dictionary. */

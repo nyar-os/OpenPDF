@@ -7,6 +7,9 @@
  */
 
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { OpenPDF, OpenPdfError, documentFormats, errorCodes, formatFromPath, formatInfo, isPdfPath } from './index.js';
@@ -20,6 +23,7 @@ const installed = (() => {
     }
 })();
 const withAddon = installed ? 'a built addon is installed' : false;
+const withoutAddon = installed ? false : 'a built addon is not installed';
 
 test('format registry classifies PDF', () => {
     assert.deepEqual([...documentFormats], ['pdf']);
@@ -41,6 +45,9 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.split('input.pdf', '1-2', 'out'),
         () => OpenPDF.splitEvery('input.pdf', 2, 'out'),
         () => OpenPDF.arrange('input.pdf', 'out.pdf', { order: [1] }),
+        () => OpenPDF.deletePages('input.pdf', '1', 'out.pdf'),
+        () => OpenPDF.rotatePages('input.pdf', '1', 90, 'out.pdf'),
+        () => OpenPDF.setPageBoxes('input.pdf', '1', [0, 0, 10, 10], 'out.pdf'),
         () => OpenPDF.setMetadata('input.pdf', 'out.pdf', { title: 'x' }),
         () => OpenPDF.setBookmarks('input.pdf', 'out.pdf', [{ title: 'Intro', page: 1 }]),
         () => OpenPDF.fillForm('input.pdf', 'out.pdf', { name: 'x' }),
@@ -70,4 +77,56 @@ test('the stable error code set is exported', () => {
     ]);
     assert.equal(new OpenPdfError('io/exists', 'exists').code, 'io/exists');
     assert.equal(OpenPdfError.prototype instanceof Error, true);
+});
+
+test('deletePages drops the selected pages', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const out = path.join(dir, 'kept.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two', 'Three'], overwrite: true });
+        const report = await OpenPDF.deletePages(source, '2', out);
+        assert.equal(report.pages, 2);
+        assert.equal(report.removed, 1);
+        assert.ok(report.bytes > 0);
+        assert.equal(OpenPDF.inspect(out).pages, 2);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('rotatePages adds rotation to the selected pages', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const out = path.join(dir, 'rotated.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two'], overwrite: true });
+        const report = await OpenPDF.rotatePages(source, '1', 90, out);
+        assert.equal(report.pages, 2);
+        assert.equal(report.rotated, 1);
+        const sizes = OpenPDF.inspect(out).pageSizes;
+        assert.equal(sizes[0].rotation, 90);
+        assert.equal(sizes[1].rotation, 0);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('setPageBoxes writes a CropBox on the selected pages', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const out = path.join(dir, 'cropped.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two'], overwrite: true });
+        const report = await OpenPDF.setPageBoxes(source, '1', [10, 20, 300, 400], out);
+        assert.equal(report.pages, 2);
+        assert.equal(report.cropped, 1);
+        assert.ok(report.bytes > 0);
+        const sizes = OpenPDF.inspect(out).pageSizes;
+        assert.equal(sizes[0].widthPt, 612);
+        assert.equal(sizes[0].heightPt, 792);
+        assert.ok((await readFile(out, 'latin1')).includes('/CropBox'));
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
 });

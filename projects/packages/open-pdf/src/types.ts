@@ -103,6 +103,9 @@ export interface PdfCapabilities {
         readonly merge: SupportLevel;
         readonly split: SupportLevel;
         readonly arrange: SupportLevel;
+        readonly deletePages: SupportLevel;
+        readonly rotatePages: SupportLevel;
+        readonly setPageBoxes: SupportLevel;
         readonly setMetadata: SupportLevel;
         readonly setBookmarks: SupportLevel;
         readonly fillForm: SupportLevel;
@@ -166,6 +169,39 @@ export interface ArrangeReport {
     readonly path: string;
     readonly pages: number;
 }
+
+/** Result of `deletePages()`. */
+export interface DeletePagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages dropped from the source document. */
+    readonly removed: number;
+    readonly bytes: number;
+}
+
+/** Result of `rotatePages()`. */
+export interface RotatePagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages whose effective `/Rotate` changed. */
+    readonly rotated: number;
+    readonly bytes: number;
+}
+
+/** Result of `setPageBoxes()`. */
+export interface SetPageBoxesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages that received the new `/CropBox`. */
+    readonly cropped: number;
+    readonly bytes: number;
+}
+
+/** `/CropBox` corners in points, `[left, bottom, right, top]`. */
+export type CropBox = readonly [left: number, bottom: number, right: number, top: number];
 
 /**
  * `/Info` fields accepted by `setMetadata()`.

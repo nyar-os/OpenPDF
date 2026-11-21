@@ -13,8 +13,10 @@ import type {
     ArrangeRequest,
     Bookmark,
     BookmarkReport,
+    CropBox,
     CreateReport,
     CreateRequest,
+    DeletePagesReport,
     ExtractedImage,
     ExtractReport,
     FormFillReport,
@@ -24,7 +26,9 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    RotatePagesReport,
     SetMetadataReport,
+    SetPageBoxesReport,
     SplitReport,
     StampReport,
     StampRequest,
@@ -107,6 +111,27 @@ export function arrange(path: string, out: string, ops: ArrangeRequest = {}): Ar
                 remove: ops.remove === undefined ? undefined : [...ops.remove],
             }),
         ),
+    );
+}
+
+/** Removes the selected pages into a new PDF. */
+export function deletePages(path: string, pages: string, out: string, overwrite = false): DeletePagesReport {
+    return decode<DeletePagesReport>(() =>
+        binding('deletePages').pdf_delete_pages(path, pages, out, overwrite),
+    );
+}
+
+/** Adds a clockwise rotation to the selected pages into a new PDF. */
+export function rotatePages(path: string, pages: string, degrees: number, out: string, overwrite = false): RotatePagesReport {
+    return decode<RotatePagesReport>(() =>
+        binding('rotatePages').pdf_rotate_pages(path, pages, degrees, out, overwrite),
+    );
+}
+
+/** Writes a `/CropBox` on the selected pages into a new PDF. */
+export function setPageBoxes(path: string, pages: string, crop: CropBox, out: string, overwrite = false): SetPageBoxesReport {
+    return decode<SetPageBoxesReport>(() =>
+        binding('setPageBoxes').pdf_set_page_boxes(path, pages, JSON.stringify([...crop]), out, overwrite),
     );
 }
 
