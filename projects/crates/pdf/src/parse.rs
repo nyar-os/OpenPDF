@@ -11,6 +11,17 @@ pub(crate) struct ParsedDocument {
     pub info: Option<u32>,
     pub pages: Vec<PageNode>,
     pub bookmarks: Vec<Bookmark>,
+    pub form_fields: Vec<FormField>,
+    pub warnings: Vec<String>,
+}
+
+/// One terminal AcroForm field with its fully qualified name.
+pub(crate) struct FormField {
+    pub name: String,
+    pub field_type: Option<String>,
+    pub value: Option<String>,
+    pub read_only: bool,
+    pub required: bool,
 }
 
 /// One page in reading order. `own` is the page dictionary, `inherited` holds
@@ -122,8 +133,9 @@ pub(crate) fn parse_document(data: &[u8]) -> Result<ParsedDocument> {
     let mut visited = HashSet::new();
     walk_page_tree(&objects, pages_object, &Dict::new(), &mut visited, 0, &mut pages)?;
     let bookmarks = collect_bookmarks(&objects, catalog)?;
+    let (form_fields, warnings) = collect_form_fields(&objects, catalog);
 
-    Ok(ParsedDocument { version, objects, info, pages, bookmarks })
+    Ok(ParsedDocument { version, objects, info, pages, bookmarks, form_fields, warnings })
 }
 
 fn read_header(data: &[u8]) -> Result<(String, usize)> {
@@ -537,6 +549,164 @@ fn walk_outline(
         }
     }
     Ok(())
+}
+
+/// Reads `/Root /AcroForm /Fields`, flattening `/Kids` into fully qualified
+/// names such as `person.name`.
+///
+/// XFA payloads and calculation scripts are ignored; a malformed node becomes
+/// a warning so inspection still succeeds with whatever structure is readable.
+fn collect_form_fields(objects: &BTreeMap<u32, PdfObject>, catalog: &Dict) -> (Vec<FormField>, Vec<String>) {
+    let mut fields = Vec::new();
+    let mut warnings = Vec::new();
+    let form = match catalog.get("AcroForm") {
+        Some(value) => match resolve_object(objects, value) {
+            Ok(PdfObject::Dictionary(form)) => form,
+            Ok(_) => {
+                warnings.push("/AcroForm is not a dictionary".to_string());
+                return (fields, warnings);
+            }
+            Err(error) => {
+                warnings.push(error.message().to_string());
+                return (fields, warnings);
+            }
+        },
+        None => return (fields, warnings),
+    };
+    if form.contains_key("XFA") {
+        warnings.push("/AcroForm /XFA is ignored".to_string());
+    }
+    let Some(values) = form.get("Fields") else {
+        return (fields, warnings);
+    };
+    let items = match resolve_object(objects, values) {
+        Ok(PdfObject::Array(items)) => items,
+        Ok(_) => {
+            warnings.push("/AcroForm /Fields is not an array".to_string());
+            return (fields, warnings);
+        }
+        Err(error) => {
+            warnings.push(error.message().to_string());
+            return (fields, warnings);
+        }
+    };
+
+    let mut visited = HashSet::new();
+    for item in items {
+        walk_form_fields(objects, item, "", None, 0, None, 0, &mut visited, &mut fields, &mut warnings);
+    }
+    (fields, warnings)
+}
+
+fn walk_form_fields(
+    objects: &BTreeMap<u32, PdfObject>,
+    node: &PdfObject,
+    prefix: &str,
+    inherited_type: Option<&str>,
+    inherited_flags: i64,
+    inherited_value: Option<&str>,
+    depth: usize,
+    visited: &mut HashSet<u32>,
+    fields: &mut Vec<FormField>,
+    warnings: &mut Vec<String>,
+) {
+    if depth > 32 {
+        warnings.push("AcroForm field tree is too deep".to_string());
+        return;
+    }
+    if let PdfObject::Reference(number, _) = node
+        && !visited.insert(*number)
+    {
+        warnings.push(format!("AcroForm field object {number} appears in a cycle"));
+        return;
+    }
+    let dictionary = match resolve_object(objects, node) {
+        Ok(PdfObject::Dictionary(dictionary)) => dictionary,
+        Ok(_) => {
+            warnings.push("AcroForm field is not a dictionary".to_string());
+            return;
+        }
+        Err(error) => {
+            warnings.push(error.message().to_string());
+            return;
+        }
+    };
+
+    let segment = match dictionary.get("T") {
+        Some(value) => match string_value(objects, value) {
+            Ok(text) => text,
+            Err(_) => {
+                warnings.push("AcroForm field has an unreadable /T value".to_string());
+                String::new()
+            }
+        },
+        None => String::new(),
+    };
+    let name = if segment.is_empty() {
+        prefix.to_string()
+    } else if prefix.is_empty() {
+        segment
+    } else {
+        format!("{prefix}.{segment}")
+    };
+
+    let field_type = match dictionary.get("FT") {
+        Some(value) => match resolve_object(objects, value) {
+            Ok(PdfObject::Name(name)) => Some(name.clone()),
+            _ => inherited_type.map(str::to_string),
+        },
+        None => inherited_type.map(str::to_string),
+    };
+    let flags = dictionary.get("Ff").and_then(PdfObject::as_i64).unwrap_or(inherited_flags);
+    let value = match dictionary.get("V") {
+        Some(value) => field_value(objects, value).or_else(|| inherited_value.map(str::to_string)),
+        None => inherited_value.map(str::to_string),
+    };
+
+    let kids = match dictionary.get("Kids") {
+        Some(value) => match resolve_object(objects, value) {
+            Ok(PdfObject::Array(items)) => Some(items),
+            Ok(_) => {
+                warnings.push("AcroForm /Kids is not an array".to_string());
+                None
+            }
+            Err(error) => {
+                warnings.push(error.message().to_string());
+                None
+            }
+        },
+        None => None,
+    };
+
+    if let Some(kids) = kids
+        && !kids.is_empty()
+    {
+        for kid in kids {
+            walk_form_fields(
+                objects,
+                kid,
+                &name,
+                field_type.as_deref(),
+                flags,
+                value.as_deref(),
+                depth + 1,
+                visited,
+                fields,
+                warnings,
+            );
+        }
+        return;
+    }
+
+    fields.push(FormField { name, field_type, value, read_only: flags & 1 != 0, required: flags & 2 != 0 });
+}
+
+fn field_value(objects: &BTreeMap<u32, PdfObject>, value: &PdfObject) -> Option<String> {
+    match resolve_object(objects, value).ok()? {
+        PdfObject::String(bytes) => Some(decode_text_string(bytes)),
+        PdfObject::Name(name) => Some(name.clone()),
+        _ => None,
+    }
 }
 
 fn string_value(objects: &BTreeMap<u32, PdfObject>, value: &PdfObject) -> Result<String> {

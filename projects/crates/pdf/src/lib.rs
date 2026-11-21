@@ -1,10 +1,11 @@
 //! Pure-Rust PDF engine for OpenPDF.
 //!
 //! The crate implements a PDF 1.7 reader and writer: it parses the object
-//! table, page tree, metadata and outlines, decodes Flate-compressed streams,
-//! and writes fresh files for creation, merging and splitting. Cross-reference
-//! streams and object streams are supported. Encrypted files and stream filters
-//! other than `/FlateDecode` are refused instead of being guessed.
+//! table, page tree, metadata, outlines and AcroForm fields, decodes Flate,
+//! LZW, ASCIIHex, ASCII85 and RunLength streams, extracts text and images, and
+//! writes fresh files for creation, merging and splitting. Cross-reference
+//! streams and object streams are supported. Encrypted files and image codecs
+//! are refused instead of being guessed.
 //!
 //! Every malformed input becomes a [`ServiceError`]; no entry point panics.
 
@@ -74,6 +75,24 @@ pub struct PdfBookmark {
     pub depth: usize,
 }
 
+/// One terminal AcroForm field.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfFormField {
+    /// Fully qualified field name built from the `/T` chain, such as
+    /// `person.name`.
+    pub name: String,
+    /// Inherited `/FT` value such as `Tx`, `Btn`, `Ch` or `Sig`.
+    #[serde(rename = "type")]
+    pub field_type: Option<String>,
+    /// `/V` as a text or name value, or `null`.
+    pub value: Option<String>,
+    /// Bit 1 of the inherited `/Ff` flags.
+    pub read_only: bool,
+    /// Bit 2 of the inherited `/Ff` flags.
+    pub required: bool,
+}
+
 /// Result of [`inspect`].
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +111,32 @@ pub struct InspectReport {
     pub page_sizes: Vec<PdfPageSize>,
     /// Flat outline list with nesting depth.
     pub bookmarks: Vec<PdfBookmark>,
+    /// Terminal AcroForm fields, empty when the document has no form.
+    pub form_fields: Vec<PdfFormField>,
+    /// Non-fatal structure problems such as an unreadable form field.
+    pub warnings: Vec<String>,
+}
+
+/// One image reached through a page's `/Resources /XObject` graph.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExtractedImage {
+    /// One-based page number.
+    pub page: usize,
+    /// One-based image index within the page.
+    pub index: usize,
+    /// Resource name used by the page or Form XObject.
+    pub name: String,
+    /// Pixel width, `0` when the dictionary is unreadable.
+    pub width: u32,
+    /// Pixel height, `0` when the dictionary is unreadable.
+    pub height: u32,
+    /// Filter chain such as `DCTDecode` or `FlateDecode`, or `none`.
+    pub filter: String,
+    /// Written file path; empty when nothing was written.
+    pub path: String,
+    /// Why the image was skipped or only partially decoded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loss: Option<String>,
 }
 
 /// Result of [`merge`].
@@ -192,6 +237,17 @@ pub fn inspect(path: &Path) -> Result<InspectReport> {
         .iter()
         .map(|bookmark| PdfBookmark { title: bookmark.title.clone(), depth: bookmark.depth })
         .collect();
+    let form_fields = document
+        .form_fields
+        .iter()
+        .map(|field| PdfFormField {
+            name: field.name.clone(),
+            field_type: field.field_type.clone(),
+            value: field.value.clone(),
+            read_only: field.read_only,
+            required: field.required,
+        })
+        .collect();
     Ok(InspectReport {
         label: label_of(path),
         version: document.version.clone(),
@@ -200,6 +256,8 @@ pub fn inspect(path: &Path) -> Result<InspectReport> {
         metadata,
         page_sizes,
         bookmarks,
+        form_fields,
+        warnings: document.warnings.clone(),
     })
 }
 
@@ -310,9 +368,9 @@ pub fn create(request: &CreateRequest) -> Result<CreateReport> {
 
 /// Extracts text from content streams decoded through their filters.
 ///
-/// `/FlateDecode` is decoded. Unsupported filters are reported in
-/// [`ExtractReport::losses`] instead of being approximated; see
-/// [`capabilities`] for the disclosed support level.
+/// Flate, LZW, ASCIIHex, ASCII85 and RunLength streams are decoded. Image
+/// codecs are reported in [`ExtractReport::losses`] instead of being
+/// approximated; see [`capabilities`] for the disclosed support level.
 pub fn extract_text(path: &Path) -> Result<ExtractReport> {
     let document = load_document(path)?;
     let extraction = extract::extract(&document)?;
@@ -325,6 +383,19 @@ pub fn extract_text(path: &Path) -> Result<ExtractReport> {
             .map(|loss| ExtractLoss { code: loss.code, page: loss.page, message: loss.message })
             .collect(),
     })
+}
+
+/// Extracts images from every page's `/Resources /XObject` graph into
+/// `out_dir`.
+///
+/// JPEG payloads are written unchanged, 8-bit DeviceGray/DeviceRGB Flate
+/// images become PNG (with `/SMask` alpha where readable), and every image
+/// that cannot be decoded is returned with a `loss` explanation instead of a
+/// guessed file.
+pub fn extract_images(path: &Path, out_dir: &Path) -> Result<Vec<ExtractedImage>> {
+    let document = load_document(path)?;
+    let stem = document_stem(path);
+    extract::extract_images(&document, out_dir, &stem)
 }
 
 /// Reports what this build actually supports.
@@ -343,10 +414,15 @@ pub fn capabilities() -> serde_json::Value {
                     "classicXref": "supported",
                     "xrefStream": "supported",
                     "objectStream": "supported",
+                    "acroForm": "supported",
                     "encrypted": "unsupported"
                 },
                 "filters": {
                     "flateDecode": "supported",
+                    "asciiHexDecode": "supported",
+                    "ascii85Decode": "supported",
+                    "runLengthDecode": "supported",
+                    "lzwDecode": "supported",
                     "pngPredictor": "supported",
                     "tiffPredictor": "supported",
                     "other": "unsupported"
@@ -358,7 +434,8 @@ pub fn capabilities() -> serde_json::Value {
             "create": "supported",
             "merge": "supported",
             "split": "supported",
-            "extractText": "partial"
+            "extractText": "partial",
+            "extractImages": "supported"
         },
         "checks": {
             "metadata": "supported",
