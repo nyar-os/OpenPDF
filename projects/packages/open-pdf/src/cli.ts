@@ -37,6 +37,20 @@ const list = (options: ParsedOptions, key: string): string[] => {
     return [];
 };
 
+/** Parses a comma-separated integer list. `null` means the text is malformed. */
+const integers = (options: ParsedOptions, key: string): number[] | undefined | null => {
+    const value = text(options, key);
+    if (value === undefined) {
+        return undefined;
+    }
+    const parts = value.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
+    if (parts.length === 0) {
+        return null;
+    }
+    const parsed = parts.map(Number);
+    return parsed.every((entry) => Number.isSafeInteger(entry)) ? parsed : null;
+};
+
 const input = (options: ParsedOptions): string | undefined => options._?.[0];
 
 function describeCapabilities(matrix: PdfCapabilities): string {
@@ -176,6 +190,45 @@ cli
             report,
             report.documents.map((part) => `${part.path} pages=${part.pages}`).join('\n'),
         );
+        return 0;
+    });
+
+cli
+    .command('arrange', 'cli.cmd.arrange')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--order <list>', 'cli.opt.order')
+    .option('--remove <list>', 'cli.opt.remove')
+    .option('--rotate <degrees>', 'cli.opt.rotate')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const order = integers(options, 'order');
+        const remove = integers(options, 'remove');
+        if (order === null || remove === null) {
+            ctx.fail('open-pdf.cli.arrange-args', {
+                message: '`--order` and `--remove` must be comma-separated page numbers',
+            });
+            return 2;
+        }
+        const rotateText = text(options, 'rotate');
+        let rotate: number | undefined;
+        if (rotateText !== undefined) {
+            rotate = Number(rotateText);
+            if (!Number.isSafeInteger(rotate)) {
+                ctx.fail('open-pdf.cli.arrange-args', { message: '`--rotate <degrees>` must be an integer' });
+                return 2;
+            }
+        }
+        const report = service.arrange(file, out, { order, rotate, remove });
+        ctx.emitResult(report, `arranged ${report.path} pages=${report.pages}`);
         return 0;
     });
 

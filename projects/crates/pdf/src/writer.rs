@@ -237,6 +237,21 @@ pub(crate) fn copy_page(
     map: &mut BTreeMap<u32, u32>,
     page: &PageNode,
 ) -> Result<u32> {
+    copy_page_with_rotation(writer, source, map, page, None)
+}
+
+/// Copies one page into the writer, optionally replacing its effective
+/// `/Rotate` value.
+///
+/// `None` keeps the copied value, `Some(0)` removes `/Rotate` entirely, and
+/// any other value is written as a direct integer.
+pub(crate) fn copy_page_with_rotation(
+    writer: &mut DocWriter,
+    source: &ParsedDocument,
+    map: &mut BTreeMap<u32, u32>,
+    page: &PageNode,
+    rotation: Option<i64>,
+) -> Result<u32> {
     let page_number = writer.reserve();
     let mut dict = Dict::new();
     for (key, value) in &page.own {
@@ -263,6 +278,12 @@ pub(crate) fn copy_page(
     }
     if !dict.contains_key("Resources") {
         dict.insert("Resources".to_string(), PdfObject::Dictionary(Dict::new()));
+    }
+    if let Some(rotation) = rotation {
+        dict.remove("Rotate");
+        if rotation != 0 {
+            dict.insert("Rotate".to_string(), PdfObject::Integer(rotation));
+        }
     }
     dict.insert("Type".to_string(), PdfObject::Name("Page".to_string()));
 

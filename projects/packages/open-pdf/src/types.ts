@@ -93,6 +93,7 @@ export interface PdfCapabilities {
         readonly create: SupportLevel;
         readonly merge: SupportLevel;
         readonly split: SupportLevel;
+        readonly arrange: SupportLevel;
         readonly extractText: SupportLevel;
         readonly extractImages: SupportLevel;
     };
@@ -132,6 +133,25 @@ export interface SplitPart {
 /** Result of `split()`. */
 export interface SplitReport {
     readonly documents: readonly SplitPart[];
+}
+
+/** Page reordering, removal and rotation accepted by `arrange()`. */
+export interface ArrangeRequest {
+    /**
+     * One input page number per output page. When `remove` is also set,
+     * removal runs first and `order` must list every surviving page once.
+     */
+    readonly order?: readonly number[];
+    /** Clockwise degrees added to each page's `/Rotate`: 90, 180 or 270. */
+    readonly rotate?: number;
+    /** Input pages to drop before applying `order`. */
+    readonly remove?: readonly number[];
+}
+
+/** Result of `arrange()`. */
+export interface ArrangeReport {
+    readonly path: string;
+    readonly pages: number;
 }
 
 /** Request accepted by `create()`. */

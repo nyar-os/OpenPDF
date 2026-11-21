@@ -19,7 +19,7 @@ mod object;
 mod parse;
 mod writer;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Result, argument, exists_error, read_error, write_error};
 use crate::object::{Dict, PdfObject};
 use crate::parse::{ParsedDocument, decode_text_string, parse_document, resolve_object};
-use crate::writer::{DocWriter, copy_info, copy_page};
+use crate::writer::{DocWriter, copy_info, copy_page, copy_page_with_rotation};
 
 pub use crate::error::ServiceError;
 
@@ -197,6 +197,36 @@ pub struct CreateReport {
     pub bytes: usize,
 }
 
+/// Page reordering, removal and rotation accepted by [`arrange`].
+///
+/// All page numbers are 1-based and refer to the input document. When both
+/// `remove` and `order` are present, removal happens first and `order` must be
+/// a permutation of the surviving pages.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentArrange {
+    /// Output page sequence, one input page number per output page.
+    #[serde(default)]
+    pub order: Option<Vec<usize>>,
+    /// Clockwise rotation in degrees added to every page's current `/Rotate`.
+    /// Only `90`, `180` and `270` are accepted.
+    #[serde(default)]
+    pub rotate: Option<i32>,
+    /// Input pages to drop before applying `order`.
+    #[serde(default)]
+    pub remove: Option<Vec<usize>>,
+}
+
+/// Result of [`arrange`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrangeReport {
+    /// Output path.
+    pub path: String,
+    /// Pages written.
+    pub pages: usize,
+}
+
 /// One text fragment that could not be extracted.
 #[derive(Debug, Clone, Serialize)]
 pub struct ExtractLoss {
@@ -329,6 +359,87 @@ pub fn split_every(path: &Path, every: usize, out_dir: &Path) -> Result<SplitRep
     Ok(SplitReport { documents })
 }
 
+/// Reorders, removes and rotates pages into a new classic PDF.
+///
+/// Removal runs before ordering, so `order` must list exactly the surviving
+/// input pages. Rotation is added to each page's current `/Rotate` and
+/// normalized to `0..360`; a result of `0` omits `/Rotate`. The output file is
+/// replaced when it already exists.
+pub fn arrange(input: &Path, out: &Path, ops: &DocumentArrange) -> Result<ArrangeReport> {
+    let document = load_document(input)?;
+    let plan = arrange_plan(document.pages.len(), ops)?;
+
+    let mut writer = DocWriter::new();
+    let mut map = BTreeMap::new();
+    let mut pages = Vec::with_capacity(plan.len());
+    for number in &plan {
+        let page = &document.pages[number - 1];
+        let rotation = ops.rotate.map(|delta| normalize_rotation(page.rotation + i64::from(delta)));
+        pages.push(copy_page_with_rotation(&mut writer, &document, &mut map, page, rotation)?);
+    }
+    let info = copy_info(&mut writer, &document, &mut map, None)?;
+    let bytes = finish_document(&mut writer, &pages, info)?;
+    write_file(out, &bytes, true)?;
+    Ok(ArrangeReport { path: out.display().to_string(), pages: pages.len() })
+}
+
+/// Validates the 1-based indices of [`DocumentArrange`] and returns the input
+/// page numbers in output order.
+fn arrange_plan(page_count: usize, ops: &DocumentArrange) -> Result<Vec<usize>> {
+    if let Some(rotate) = ops.rotate
+        && !matches!(rotate, 90 | 180 | 270)
+    {
+        return Err(argument(format!("arrange rotation {rotate} is not 90, 180 or 270")));
+    }
+    if let Some(order) = &ops.order
+        && order.is_empty()
+    {
+        return Err(argument("arrange --order must name at least one page"));
+    }
+
+    let mut removed = BTreeSet::new();
+    for number in ops.remove.as_deref().unwrap_or(&[]) {
+        check_page_number(*number, page_count)?;
+        if !removed.insert(*number) {
+            return Err(argument(format!("page {number} appears twice in --remove")));
+        }
+    }
+    let survivors: Vec<usize> = (1..=page_count).filter(|number| !removed.contains(number)).collect();
+    if survivors.is_empty() {
+        return Err(argument("arrange cannot remove every page"));
+    }
+
+    let Some(order) = &ops.order else {
+        return Ok(survivors);
+    };
+    let mut seen = BTreeSet::new();
+    for number in order {
+        check_page_number(*number, page_count)?;
+        if removed.contains(number) {
+            return Err(argument(format!("page {number} is removed but still present in --order")));
+        }
+        if !seen.insert(*number) {
+            return Err(argument(format!("page {number} appears twice in --order")));
+        }
+    }
+    if order.len() != survivors.len() {
+        return Err(argument("--order must list every surviving page exactly once"));
+    }
+    Ok(order.clone())
+}
+
+fn check_page_number(number: usize, page_count: usize) -> Result<()> {
+    if number == 0 || number > page_count {
+        return Err(argument(format!("page {number} is outside the {page_count} available pages")));
+    }
+    Ok(())
+}
+
+fn normalize_rotation(value: i64) -> i64 {
+    let wrapped = value % 360;
+    if wrapped < 0 { wrapped + 360 } else { wrapped }
+}
+
 fn prepare_out_dir(out_dir: &Path) -> Result<()> {
     fs::create_dir_all(out_dir).map_err(|error| write_error(format!("cannot create {}: {error}", out_dir.display())))
 }
@@ -434,6 +545,7 @@ pub fn capabilities() -> serde_json::Value {
             "create": "supported",
             "merge": "supported",
             "split": "supported",
+            "arrange": "supported",
             "extractText": "partial",
             "extractImages": "supported"
         },

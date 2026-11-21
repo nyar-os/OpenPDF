@@ -9,6 +9,8 @@
 import { NotImplementedError, OpenPdfError, errorCodes, type OpenPdfErrorCode } from './errors.js';
 import { nativeBinding } from './native.js';
 import type {
+    ArrangeReport,
+    ArrangeRequest,
     CreateReport,
     CreateRequest,
     ExtractedImage,
@@ -83,6 +85,21 @@ export function split(path: string, ranges: string, outDir: string): SplitReport
 /** Splits one PDF into consecutive files of at most `every` pages each. */
 export function splitEvery(path: string, every: number, outDir: string): SplitReport {
     return decode<SplitReport>(() => binding('splitEvery').pdf_split_every(path, every, outDir));
+}
+
+/** Reorders, removes and rotates pages into a new PDF. */
+export function arrange(path: string, out: string, ops: ArrangeRequest = {}): ArrangeReport {
+    return decode<ArrangeReport>(() =>
+        binding('arrange').pdf_arrange(
+            path,
+            out,
+            JSON.stringify({
+                order: ops.order === undefined ? undefined : [...ops.order],
+                rotate: ops.rotate,
+                remove: ops.remove === undefined ? undefined : [...ops.remove],
+            }),
+        ),
+    );
 }
 
 /** Creates a PDF with one Helvetica text page per request entry. */

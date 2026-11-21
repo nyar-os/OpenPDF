@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{DeflateLevel, Zlib};
-use open_pdf_core::{CreateRequest, capabilities, create, extract_images, extract_text, inspect, merge, split};
+use open_pdf_core::{
+    CreateRequest, DocumentArrange, arrange, capabilities, create, extract_images, extract_text, inspect, merge, split,
+};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -681,4 +683,86 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     }
     assert_eq!(matrix["formats"]["pdf"]["structures"]["acroForm"], "supported");
     assert_eq!(matrix["operations"]["extractImages"], "supported");
+    assert_eq!(matrix["operations"]["arrange"], "supported");
+}
+
+#[test]
+fn arrange_removes_then_orders_and_rotates() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
+    let out = workspace.path("arranged.pdf");
+
+    let report = arrange(
+        &path,
+        &out,
+        &DocumentArrange { order: Some(vec![3, 1]), rotate: Some(90), remove: Some(vec![2]) },
+    )
+    .expect("arrange");
+    assert_eq!(report.pages, 2);
+
+    let inspected = inspect(&out).expect("inspect arranged");
+    assert_eq!(inspected.pages, 2);
+    assert_eq!(inspected.page_sizes[0].rotation, 90);
+    assert_eq!(inspected.page_sizes[1].rotation, 90);
+
+    let extracted = extract_text(&out).expect("extract arranged");
+    let three = extracted.markdown.find("Three").expect("Three");
+    let one = extracted.markdown.find("One").expect("One");
+    assert!(three < one, "pages are out of order: {:?}", extracted.markdown);
+    assert!(!extracted.markdown.contains("Two"), "{:?}", extracted.markdown);
+}
+
+#[test]
+fn arrange_adds_rotation_to_the_existing_value_and_normalizes() {
+    let workspace = Workspace::new();
+    let path = workspace.write(
+        "rotated.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] /Rotate 90 >>",
+            "<< /Type /Page /Parent 2 0 R >>",
+        ]),
+    );
+
+    let quarter = workspace.path("quarter.pdf");
+    arrange(&path, &quarter, &DocumentArrange { rotate: Some(180), ..DocumentArrange::default() }).expect("arrange");
+    assert_eq!(inspect(&quarter).expect("inspect").page_sizes[0].rotation, 270);
+
+    let full = workspace.path("full.pdf");
+    arrange(&path, &full, &DocumentArrange { rotate: Some(270), ..DocumentArrange::default() }).expect("arrange");
+    assert_eq!(inspect(&full).expect("inspect").page_sizes[0].rotation, 0);
+    let bytes = fs::read(&full).expect("read arranged");
+    assert!(!String::from_utf8_lossy(&bytes).contains("/Rotate"), "a zero rotation must be omitted");
+}
+
+#[test]
+fn arrange_rejects_invalid_indices_duplicates_and_empty_results() {
+    let workspace = Workspace::new();
+    let path = workspace.create("three.pdf", None, &["One", "Two", "Three"]);
+    let out = workspace.path("invalid.pdf");
+
+    let cases = [
+        DocumentArrange { order: Some(vec![0]), ..DocumentArrange::default() },
+        DocumentArrange { order: Some(vec![4]), ..DocumentArrange::default() },
+        DocumentArrange { order: Some(vec![1, 1, 2]), ..DocumentArrange::default() },
+        DocumentArrange { order: Some(vec![1, 2]), ..DocumentArrange::default() },
+        DocumentArrange { order: Some(vec![2]), remove: Some(vec![2]), ..DocumentArrange::default() },
+        DocumentArrange { remove: Some(vec![4]), ..DocumentArrange::default() },
+        DocumentArrange { remove: Some(vec![1, 1]), ..DocumentArrange::default() },
+        DocumentArrange { remove: Some(vec![1, 2, 3]), ..DocumentArrange::default() },
+        DocumentArrange { rotate: Some(45), ..DocumentArrange::default() },
+    ];
+    for ops in &cases {
+        assert_invalid(arrange(&path, &out, ops), "session/argument-invalid");
+    }
+}
+
+#[test]
+fn arrange_on_corrupt_input_reports_format_invalid_without_panicking() {
+    let workspace = Workspace::new();
+    let broken = workspace.write("broken-arrange.pdf", b"not a PDF");
+    assert_invalid(
+        arrange(&broken, &workspace.path("out.pdf"), &DocumentArrange::default()),
+        "format/invalid",
+    );
 }

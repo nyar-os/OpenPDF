@@ -94,6 +94,19 @@ fn pdf_split_every(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Reorders, removes and rotates pages into a new PDF.
+#[function]
+fn pdf_arrange(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out = text(&ctx, 1)?;
+    let raw = text(&ctx, 2)?;
+    let ops: open_pdf_core::DocumentArrange =
+        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+    let report =
+        open_pdf_core::arrange(std::path::Path::new(&path), std::path::Path::new(&out), &ops).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Creates a PDF from a JSON request.
 #[function]
 fn pdf_create(ctx: CallContext) -> Result<JsValue> {
@@ -125,6 +138,7 @@ register_module![
     pdf_merge,
     pdf_split,
     pdf_split_every,
+    pdf_arrange,
     pdf_create,
     pdf_extract_text,
     pdf_extract_images

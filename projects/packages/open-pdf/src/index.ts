@@ -7,6 +7,8 @@
 
 import * as service from './service.js';
 import type {
+    ArrangeReport,
+    ArrangeRequest,
     CreateReport,
     CreateRequest,
     ExtractedImage,
@@ -54,6 +56,11 @@ export class OpenPDF {
     /** Splits one PDF into consecutive files of at most `every` pages each. */
     static splitEvery(path: string, every: number, outDir: string): SplitReport {
         return service.splitEvery(path, every, outDir);
+    }
+
+    /** Reorders, removes and rotates pages into a new PDF. */
+    static arrange(path: string, out: string, ops: ArrangeRequest = {}): ArrangeReport {
+        return service.arrange(path, out, ops);
     }
 
     /** Creates a PDF with one Helvetica text page per request entry. */
