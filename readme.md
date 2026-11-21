@@ -15,10 +15,13 @@ Acrobat, no system dependency.
 - Create a text PDF from scratch with A4 pages and Helvetica text.
 - Merge any number of PDFs and keep their page order.
 - Split by 1-based ranges such as `1-5,10,15-20`, or into fixed-size chunks.
-- Read version, page count, page geometry, document metadata and bookmarks from
-  classic PDFs as well as PDFs that use cross-reference and object streams.
-- Extract text from Flate-compressed content streams and report every skipped
-  part.
+- Read version, page count, page geometry, document metadata, bookmarks and
+  AcroForm fields from classic PDFs as well as PDFs that use cross-reference and
+  object streams.
+- Extract text from Flate, LZW, ASCIIHex, ASCII85 and RunLength streams and
+  report every skipped part.
+- Extract embedded images: JPEG payloads are written unchanged and 8-bit
+  DeviceGray/DeviceRGB streams become PNG (with `/SMask` alpha).
 
 ## 🚀 Usage
 
@@ -42,6 +45,9 @@ open-pdf create --out notes.pdf --title "Meeting notes" \
 
 # Extract text and list extraction losses
 open-pdf extract-text notes.pdf
+
+# Extract embedded images as JPG/PNG into a directory
+open-pdf extract-images notes.pdf -o images/
 ```
 
 The same operations are available as an imperative SDK:
@@ -59,6 +65,9 @@ OpenPDF.create({ out: 'hello.pdf', title: 'Hello', pages: ['line one\nline two']
 
 const text = OpenPDF.extractText('hello.pdf');
 console.log(text.markdown, text.losses);
+
+const images = OpenPDF.extractImages('hello.pdf', 'images');
+console.log(images);
 ```
 
 `open-pdf capabilities` prints the honest support matrix, including what is
@@ -75,20 +84,24 @@ flowchart LR
     C -->|create| F[Text page composer]
     E --> G[Standard PDF 1.7 writer]
     F --> G
-    B --> H[Filter decoder<br/>Flate and predictors]
+    B --> H[Filter decoder<br/>Flate, LZW, ASCIIHex, ASCII85, RunLength]
     H --> I[Text extraction]
+    H --> J[Image extraction<br/>JPEG passthrough and PNG encoding]
 ```
 
 ## 🧱 What it does NOT do
 
 - **No encrypted PDFs** — files with `/Encrypt`, in a classic trailer or an
   xref stream, are rejected and never decrypted.
-- **No filters other than Flate** — `/LZWDecode`, `/ASCII85Decode`,
-  `/ASCIIHexDecode`, `/RunLengthDecode` and image codecs are reported as losses
-  for text extraction. Their raw bytes are preserved when pages are copied.
-- **No rendering or rasterization** — no PNG, SVG or print preview output.
+- **No image codecs** — `/DCTDecode` is copied as a JPEG only when its payload
+  already starts with the SOI marker; `/JBIG2Decode`, `/CCITTFaxDecode` and
+  `/JPXDecode` are reported as losses. PNG output covers 8-bit DeviceGray and
+  DeviceRGB only.
+- **No rendering or rasterization** — no page preview, SVG or print output; PNG
+  files are re-encoded embedded images, not rendered pages.
 - **No repair of incremental updates beyond a linear scan** — malformed or
   truncated input returns a stable error code instead of a best-effort document.
-- **No form filling, JavaScript or digital signatures**.
+- **No form filling, JavaScript or digital signatures** — AcroForm fields are
+  read for inspection only.
 - **No font embedding** — created documents use the built-in Helvetica font and
   WinAnsi-compatible text.
