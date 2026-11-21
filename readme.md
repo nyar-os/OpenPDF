@@ -20,6 +20,9 @@ Acrobat, no system dependency.
 - Merge any number of PDFs and keep their page order.
 - Split by 1-based ranges such as `1-5,10,15-20`, or into fixed-size chunks.
 - Reorder, remove and rotate pages without re-rendering them.
+- Delete pages by a 1-based range list such as `2,5-7`, keeping the rest in order.
+- Rotate only the selected pages clockwise by 90, 180 or 270 degrees.
+- Write a custom `/CropBox` on the selected pages without touching `/MediaBox`.
 - Rewrite the document information dictionary.
 - Paint a text stamp — watermark, header or footer — on every page or a page
   range, with font, size, rotation, opacity and colour control. `{page}` and
@@ -56,6 +59,15 @@ open-pdf create --out notes.pdf --title "Meeting notes" \
 
 # Reorder, drop and rotate pages
 open-pdf arrange input.pdf -o arranged.pdf --order 3,1,2 --remove 4 --rotate 90
+
+# Delete pages and keep the rest in order
+open-pdf delete-pages input.pdf --pages 2,5-7 -o kept.pdf
+
+# Rotate only pages 1-3 clockwise by 90 degrees
+open-pdf rotate input.pdf --pages 1-3 --degrees 90 -o rotated.pdf
+
+# Set a CropBox on page 1: left,bottom,right,top in points
+open-pdf set-page-boxes input.pdf --pages 1 --box 10,20,300,400 -o cropped.pdf
 
 # Rewrite metadata
 open-pdf set-metadata input.pdf -o tagged.pdf --title "Final" --author "Ada"

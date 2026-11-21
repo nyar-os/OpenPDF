@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createCli, type ParsedOptions } from '@wae/commander';
 
 import { OpenPDF } from './index.js';
-import type { Bookmark, FormValue, PdfCapabilities, PdfInspectReport, SplitReport } from './types.js';
+import type { Bookmark, CropBox, FormValue, PdfCapabilities, PdfInspectReport, SplitReport } from './types.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +65,47 @@ const integers = (options: ParsedOptions, key: string): number[] | undefined | n
 };
 
 const input = (options: ParsedOptions): string | undefined => options._?.[0];
+
+/** Parses a 1-based page range list such as `1-3,5`. `null` means malformed. */
+const pageRanges = (options: ParsedOptions, key: string): string | undefined | null => {
+    const value = text(options, key);
+    if (value === undefined) {
+        return undefined;
+    }
+    const parts = value.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
+    if (parts.length === 0) {
+        return null;
+    }
+    for (const part of parts) {
+        const bounds = part.split('-');
+        if (bounds.length > 2 || !bounds.every((bound) => /^\d+$/.test(bound))) {
+            return null;
+        }
+        const start = Number(bounds[0]);
+        const end = bounds.length === 1 ? start : Number(bounds[1]);
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) {
+            return null;
+        }
+    }
+    return parts.join(',');
+};
+
+/** Parses `l,b,r,t` crop corners. `null` means malformed. */
+const cropBox = (options: ParsedOptions, key: string): CropBox | undefined | null => {
+    const value = text(options, key);
+    if (value === undefined) {
+        return undefined;
+    }
+    const parts = value.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
+    if (parts.length !== 4) {
+        return null;
+    }
+    const parsed = parts.map(Number);
+    if (!parsed.every((entry) => Number.isFinite(entry))) {
+        return null;
+    }
+    return [parsed[0], parsed[1], parsed[2], parsed[3]];
+};
 
 function describeCapabilities(matrix: PdfCapabilities): string {
     const pdf = matrix.formats.pdf;
@@ -242,6 +283,114 @@ cli
         }
         const report = await pdf.arrange(file, out, { order, rotate, remove });
         ctx.emitResult(report, `arranged ${report.path} pages=${report.pages}`);
+        return 0;
+    });
+
+cli
+    .command('delete-pages', 'cli.cmd.delete-pages')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options, 'pages');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        const report = await pdf.deletePages(file, pages, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `deleted ${report.path} pages=${report.pages} removed=${report.removed} bytes=${report.bytes}`,
+        );
+        return 0;
+    });
+
+cli
+    .command('rotate', 'cli.cmd.rotate')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('--degrees <90|180|270>', 'cli.opt.degrees')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options, 'pages');
+        const degreesText = text(options, 'degrees');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        const degrees = degreesText === undefined ? Number.NaN : Number(degreesText);
+        if (degrees !== 90 && degrees !== 180 && degrees !== 270) {
+            ctx.fail('open-pdf.cli.degrees-args', { message: '`--degrees` must be 90, 180 or 270' });
+            return 2;
+        }
+        const report = await pdf.rotatePages(file, pages, degrees, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `rotated ${report.path} pages=${report.pages} rotated=${report.rotated} degrees=${degrees} bytes=${report.bytes}`,
+        );
+        return 0;
+    });
+
+cli
+    .command('set-page-boxes', 'cli.cmd.set-page-boxes')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('--box <l,b,r,t>', 'cli.opt.box')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options, 'pages');
+        const box = cropBox(options, 'box');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        if (box === undefined || box === null) {
+            ctx.fail('open-pdf.cli.box-args', {
+                message: '`--box <l,b,r,t>` must be four finite numbers',
+            });
+            return 2;
+        }
+        const report = await pdf.setPageBoxes(file, pages, box, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `boxed ${report.path} pages=${report.pages} cropped=${report.cropped} box=${box.join(',')} bytes=${report.bytes}`,
+        );
         return 0;
     });
 
