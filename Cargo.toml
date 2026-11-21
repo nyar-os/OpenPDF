@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["projects/sub_projects", "projects/crates/*"]
-default-members = ["projects/crates/pdf"]
+default-members = ["projects/crates/napi"]
 exclude = ["projects/packages"]
 
 [workspace.package]

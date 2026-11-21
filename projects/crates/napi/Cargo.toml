@@ -1,0 +1,18 @@
+[package]
+name = "open-pdf-napi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Thin Node-API surface for OpenPDF"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+open-pdf-core = { path = "../pdf" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+wae = { workspace = true }
