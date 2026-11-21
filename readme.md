@@ -12,9 +12,18 @@ Acrobat, no system dependency.
 
 ## ✨ What you can do
 
-- Create a text PDF from scratch with A4 pages and Helvetica text.
+- Create a PDF from text with selectable paper size (`a3`/`a4`/`a5`/`letter`/
+  `legal`/`tabloid` or `WIDTHxHEIGHT`), base-14 font, font size, margins,
+  left/center/right alignment, automatic wrapping and automatic pagination.
+- Write title, author, subject, keywords and creator metadata, and draw a
+  `page / total` footer.
 - Merge any number of PDFs and keep their page order.
 - Split by 1-based ranges such as `1-5,10,15-20`, or into fixed-size chunks.
+- Reorder, remove and rotate pages without re-rendering them.
+- Rewrite the document information dictionary.
+- Paint a text stamp — watermark, header or footer — on every page or a page
+  range, with font, size, rotation, opacity and colour control. `{page}` and
+  `{pages}` placeholders are substituted per page.
 - Read version, page count, page geometry, document metadata, bookmarks and
   AcroForm fields from classic PDFs as well as PDFs that use cross-reference and
   object streams.
@@ -38,10 +47,23 @@ open-pdf split input.pdf --ranges 1-5,10 --out-dir pages/
 # Split into consecutive files of at most 2 pages: input-p1-2.pdf, input-p3-4.pdf, ...
 open-pdf split input.pdf --every 2 --out-dir chunks/
 
-# Create two A4 pages; | separates lines inside one page
+# Create two styled pages; | separates lines inside one page
 open-pdf create --out notes.pdf --title "Meeting notes" \
   --page "Agenda|1. Budget|2. Timeline" \
-  --page "Decisions"
+  --page "Decisions" \
+  --page-size a4 --font times --font-size 14 --margin 56 \
+  --align center --author "Ada" --page-numbers
+
+# Reorder, drop and rotate pages
+open-pdf arrange input.pdf -o arranged.pdf --order 3,1,2 --remove 4 --rotate 90
+
+# Rewrite metadata
+open-pdf set-metadata input.pdf -o tagged.pdf --title "Final" --author "Ada"
+
+# Watermark every page, or only pages 1-3
+open-pdf stamp input.pdf -o draft.pdf --text "DRAFT {page}/{pages}" \
+  --position center --rotation 45 --opacity 0.25 --color "#CC0000"
+open-pdf stamp input.pdf -o footer.pdf --text "Internal" --position bottom --pages 1-3
 
 # Extract text and list extraction losses
 open-pdf extract-text notes.pdf
@@ -50,25 +72,51 @@ open-pdf extract-text notes.pdf
 open-pdf extract-images notes.pdf -o images/
 ```
 
-The same operations are available as an imperative SDK:
+The same operations are available through the session SDK. The session is the
+product; the CLI is a thin consumer of it:
 
 ```ts
 import { OpenPDF } from '@wae/open-pdf';
 
-const info = OpenPDF.inspect('input.pdf');
+const pdf = new OpenPDF({ locale: 'zh-CN', overwrite: true });
+
+const info = await pdf.inspect('input.pdf');
 console.log(info.version, info.pages, info.metadata.title);
 
-OpenPDF.merge(['a.pdf', 'b.pdf'], 'combined.pdf', { title: 'Combined' });
-OpenPDF.split('combined.pdf', '1-2,3', 'pages');
-OpenPDF.splitEvery('combined.pdf', 2, 'chunks');
-OpenPDF.create({ out: 'hello.pdf', title: 'Hello', pages: ['line one\nline two'] });
+await pdf.merge(['a.pdf', 'b.pdf'], 'combined.pdf', { title: 'Combined' });
+await pdf.split('combined.pdf', '1-2,3', 'pages');
+await pdf.splitEvery('combined.pdf', 2, 'chunks');
+await pdf.create({ out: 'hello.pdf', title: 'Hello', pages: ['line one\nline two'] });
+await pdf.create({
+  out: 'styled.pdf',
+  title: 'Styled',
+  pages: ['Centered body text'],
+  pageSize: 'a4',
+  font: 'times',
+  fontSize: 16,
+  marginPt: 56,
+  align: 'center',
+  pageNumbers: true,
+});
 
-const text = OpenPDF.extractText('hello.pdf');
+const stamped = await pdf.stamp('styled.pdf', 'draft.pdf', {
+  text: 'DRAFT {page}/{pages}',
+  position: 'center',
+  rotation: 45,
+  opacity: 0.25,
+  color: '#CC0000',
+});
+console.log(stamped.pagesStamped);
+
+const text = await pdf.extractText('hello.pdf');
 console.log(text.markdown, text.losses);
 
-const images = OpenPDF.extractImages('hello.pdf', 'images');
+const images = await pdf.extractImages('hello.pdf', 'images');
 console.log(images);
 ```
+
+`OpenPDF.capabilities(...)` and the other synchronous static methods stay as
+compatibility wrappers for callers that do not keep a session.
 
 `open-pdf capabilities` prints the honest support matrix, including what is
 partial and what is not supported at all.
@@ -103,5 +151,6 @@ flowchart LR
   truncated input returns a stable error code instead of a best-effort document.
 - **No form filling, JavaScript or digital signatures** — AcroForm fields are
   read for inspection only.
-- **No font embedding** — created documents use the built-in Helvetica font and
-  WinAnsi-compatible text.
+- **No font embedding** — created documents select among the base-14 fonts
+  (Helvetica, Times, Courier and their bold variants) with WinAnsi-compatible
+  text; custom TrueType embedding is not implemented.

@@ -20,9 +20,12 @@ export interface NativeBinding {
     pdf_split_every(path: string, every: number, outDir: string): string;
     pdf_arrange(path: string, out: string, opsJson: string): string;
     pdf_set_metadata(path: string, out: string, patchJson: string): string;
+    pdf_set_bookmarks(path: string, out: string, requestJson: string): string;
+    pdf_fill_form(path: string, out: string, requestJson: string): string;
     pdf_create(requestJson: string): string;
     pdf_extract_text(path: string): string;
     pdf_extract_images(path: string, outDir: string): string;
+    pdf_stamp(path: string, out: string, requestJson: string): string;
 }
 
 let cached: NativeBinding | null | undefined;

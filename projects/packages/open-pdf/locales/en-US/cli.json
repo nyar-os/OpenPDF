@@ -8,7 +8,10 @@
             "split": "Write one file per page range or per N pages",
             "arrange": "Reorder, remove and rotate pages into a new PDF",
             "set-metadata": "Copy every page and rewrite the information dictionary",
-            "create": "Create a PDF with Helvetica text pages",
+            "bookmarks": "Copy every page and replace the outline with the given bookmarks",
+            "fill-form": "Copy every page and fill AcroForm field values",
+            "create": "Create a PDF with styled text pages",
+            "stamp": "Paint a text watermark, header or footer onto selected pages",
             "extract-text": "Extract text from content streams, including compressed ones",
             "extract-images": "Write embedded JPEG and PNG-encodable images to a directory"
         },
@@ -28,7 +31,22 @@
             "keywords": "Document keywords, empty text deletes it",
             "creator": "Document creator, empty text deletes it",
             "producer": "Document producer, empty text deletes it",
-            "page": "Page text; use | for a line break (repeatable)"
+            "page": "Page text; use | for a line break (repeatable)",
+            "page-size": "Paper size: a3, a4, a5, letter, legal, tabloid or WIDTHxHEIGHT",
+            "font": "Base-14 font: helvetica, helvetica-bold, times, times-bold, courier or courier-bold",
+            "font-size": "Body or stamp font size in points",
+            "margin": "Page margin in points",
+            "align": "Text alignment: left, center or right",
+            "page-numbers": "Draw a page / total footer on every page",
+            "stamp-text": "Stamp text; {page} and {pages} are substituted",
+            "position": "Stamp position: center, top/header or bottom/footer",
+            "stamp-rotation": "Clockwise rotation for a centered stamp, -180 to 180",
+            "opacity": "Stamp opacity from 0 to 1",
+            "color": "Stamp colour as #RGB or #RRGGBB",
+            "stamp-pages": "Comma-separated 1-based pages to stamp, e.g. 1-3,5",
+            "bookmark": "Outline entry as Title:Page (repeatable), e.g. \"Intro:1\"",
+            "depth": "Zero-based nesting level for the bookmarks, default 0",
+            "set": "Field value as Name=Value (repeatable); true and false become booleans"
         }
     }
 }

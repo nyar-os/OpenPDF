@@ -119,6 +119,45 @@ fn pdf_set_metadata(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Bookmark request payload accepted by `pdf_set_bookmarks`.
+#[derive(serde::Deserialize)]
+struct BookmarkRequest {
+    bookmarks: Vec<open_pdf_core::Bookmark>,
+}
+
+/// Copies every page while replacing the outline tree.
+#[function]
+fn pdf_set_bookmarks(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out = text(&ctx, 1)?;
+    let raw = text(&ctx, 2)?;
+    let request: BookmarkRequest =
+        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+    let report =
+        open_pdf_core::set_bookmarks(std::path::Path::new(&path), std::path::Path::new(&out), &request.bookmarks)
+            .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
+/// Field-value payload accepted by `pdf_fill_form`.
+#[derive(serde::Deserialize)]
+struct FillFormRequest {
+    values: std::collections::BTreeMap<String, open_pdf_core::FormValue>,
+}
+
+/// Copies every page while filling AcroForm field values.
+#[function]
+fn pdf_fill_form(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out = text(&ctx, 1)?;
+    let raw = text(&ctx, 2)?;
+    let request: FillFormRequest =
+        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+    let report = open_pdf_core::fill_form(std::path::Path::new(&path), std::path::Path::new(&out), &request.values)
+        .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Creates a PDF from a JSON request.
 #[function]
 fn pdf_create(ctx: CallContext) -> Result<JsValue> {
@@ -143,6 +182,19 @@ fn pdf_extract_images(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::extract_images(std::path::Path::new(&path), std::path::Path::new(&out_dir)).map_err(failure)?)
 }
 
+/// Paints a text stamp on the selected pages of one PDF file.
+#[function]
+fn pdf_stamp(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out = text(&ctx, 1)?;
+    let raw = text(&ctx, 2)?;
+    let request: open_pdf_core::StampRequest =
+        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+    let report =
+        open_pdf_core::stamp(std::path::Path::new(&path), std::path::Path::new(&out), &request).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 register_module![
     version,
     capabilities,
@@ -152,7 +204,10 @@ register_module![
     pdf_split_every,
     pdf_arrange,
     pdf_set_metadata,
+    pdf_set_bookmarks,
+    pdf_fill_form,
     pdf_create,
     pdf_extract_text,
-    pdf_extract_images
+    pdf_extract_images,
+    pdf_stamp
 ];

@@ -37,6 +37,10 @@ impl DocWriter {
         self.objects.get_mut(&number)
     }
 
+    pub(crate) fn get(&self, number: u32) -> Option<&PdfObject> {
+        self.objects.get(&number)
+    }
+
     /// Serializes the document as a classic PDF 1.7 file with a full xref table.
     pub(crate) fn finish(&self, root: u32, info: Option<u32>) -> Result<Vec<u8>> {
         let highest = self.objects.keys().next_back().copied().unwrap_or(0);

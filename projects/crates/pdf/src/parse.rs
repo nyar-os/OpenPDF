@@ -9,6 +9,7 @@ pub(crate) struct ParsedDocument {
     pub version: String,
     pub objects: BTreeMap<u32, PdfObject>,
     pub info: Option<u32>,
+    pub catalog: Dict,
     pub pages: Vec<PageNode>,
     pub bookmarks: Vec<Bookmark>,
     pub form_fields: Vec<FormField>,
@@ -134,8 +135,9 @@ pub(crate) fn parse_document(data: &[u8]) -> Result<ParsedDocument> {
     walk_page_tree(&objects, pages_object, &Dict::new(), &mut visited, 0, &mut pages)?;
     let bookmarks = collect_bookmarks(&objects, catalog)?;
     let (form_fields, warnings) = collect_form_fields(&objects, catalog);
+    let catalog = catalog.clone();
 
-    Ok(ParsedDocument { version, objects, info, pages, bookmarks, form_fields, warnings })
+    Ok(ParsedDocument { version, objects, info, catalog, pages, bookmarks, form_fields, warnings })
 }
 
 fn read_header(data: &[u8]) -> Result<(String, usize)> {

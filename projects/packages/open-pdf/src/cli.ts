@@ -2,7 +2,7 @@
 /**
  * Command-line assembly only.
  *
- * Every command maps options onto one operation of `service.ts`; PDF semantics
+ * Every command maps options onto one method of `new OpenPDF()`; PDF semantics
  * stay native. Help text and errors come from `@wae/commander`, so the CLI does
  * not grow its own parser.
  */
@@ -12,12 +12,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createCli, type ParsedOptions } from '@wae/commander';
 
-import * as service from './service.js';
-import type { PdfCapabilities, PdfInspectReport, SplitReport } from './types.js';
+import { OpenPDF } from './index.js';
+import type { Bookmark, FormValue, PdfCapabilities, PdfInspectReport, SplitReport } from './types.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 const cli = createCli('open-pdf').locales(path.join(here, '..', 'locales')).intro('cli.intro');
+
+/** One session per process: the CLI is a consumer of the public API. */
+const pdf = new OpenPDF();
 
 export { cli };
 
@@ -25,6 +28,16 @@ const text = (options: ParsedOptions, key: string): string | undefined =>
     typeof options[key] === 'string' ? (options[key] as string) : undefined;
 
 const flag = (options: ParsedOptions, key: string): boolean => options[key] === true || options[key] === 'true';
+
+/** Reads an optional decimal option. `null` means the text is malformed. */
+const decimal = (options: ParsedOptions, key: string): number | undefined | null => {
+    const value = text(options, key);
+    if (value === undefined) {
+        return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
 
 const list = (options: ParsedOptions, key: string): string[] => {
     const value = options[key];
@@ -106,7 +119,7 @@ function describeInspect(report: PdfInspectReport): string {
 }
 
 cli.command('capabilities', 'cli.cmd.capabilities').actionCtx(async (_options, _args, ctx) => {
-    const matrix = service.capabilities();
+    const matrix = await pdf.capabilities();
     ctx.emitResult(matrix, describeCapabilities(matrix));
     return 0;
 });
@@ -117,7 +130,7 @@ cli.command('inspect', 'cli.cmd.inspect').actionCtx(async (options, _args, ctx) 
         ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
         return 2;
     }
-    const report = service.inspect(file);
+    const report = await pdf.inspect(file);
     ctx.emitResult(report, describeInspect(report));
     return 0;
 });
@@ -138,7 +151,7 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = service.merge(inputs, out, {
+        const report = await pdf.merge(inputs, out, {
             overwrite: flag(options, 'overwrite'),
             title: text(options, 'title'),
         });
@@ -182,9 +195,9 @@ cli
                 ctx.fail('open-pdf.cli.split-args', { message: '`--every <count>` must be a positive integer' });
                 return 2;
             }
-            report = service.splitEvery(file, count, outDir);
+            report = await pdf.splitEvery(file, count, outDir);
         } else {
-            report = service.split(file, ranges as string, outDir);
+            report = await pdf.split(file, ranges as string, outDir);
         }
         ctx.emitResult(
             report,
@@ -227,7 +240,7 @@ cli
                 return 2;
             }
         }
-        const report = service.arrange(file, out, { order, rotate, remove });
+        const report = await pdf.arrange(file, out, { order, rotate, remove });
         ctx.emitResult(report, `arranged ${report.path} pages=${report.pages}`);
         return 0;
     });
@@ -252,7 +265,7 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = service.setMetadata(file, out, {
+        const report = await pdf.setMetadata(file, out, {
             title: text(options, 'title'),
             author: text(options, 'author'),
             subject: text(options, 'subject'),
@@ -275,10 +288,118 @@ cli
     });
 
 cli
+    .command('bookmarks', 'cli.cmd.bookmarks')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--bookmark <title:page>...', 'cli.opt.bookmark')
+    .option('--depth <level>', 'cli.opt.depth')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const entries = list(options, 'bookmark');
+        if (entries.length === 0) {
+            ctx.fail('open-pdf.cli.bookmark-args', {
+                message: 'at least one `--bookmark "Title:Page"` is required',
+            });
+            return 2;
+        }
+        const depthText = text(options, 'depth');
+        let depth = 0;
+        if (depthText !== undefined) {
+            depth = Number(depthText);
+            if (!Number.isSafeInteger(depth) || depth < 0) {
+                ctx.fail('open-pdf.cli.bookmark-args', { message: '`--depth <level>` must be a non-negative integer' });
+                return 2;
+            }
+        }
+        const bookmarks: Bookmark[] = [];
+        for (const entry of entries) {
+            const separator = entry.lastIndexOf(':');
+            const title = separator < 0 ? '' : entry.slice(0, separator).trim();
+            const pageText = separator < 0 ? '' : entry.slice(separator + 1).trim();
+            const page = Number(pageText);
+            if (title.length === 0 || !/^\d+$/.test(pageText) || !Number.isSafeInteger(page) || page < 1) {
+                ctx.fail('open-pdf.cli.bookmark-args', {
+                    message: `\`--bookmark "${entry}"\` must be "Title:Page" with a positive page number`,
+                });
+                return 2;
+            }
+            bookmarks.push({ title, page, depth });
+        }
+        const report = await pdf.setBookmarks(file, out, bookmarks);
+        const human = [
+            `bookmarks ${report.path} pages=${report.pages} entries=${report.bookmarks}`,
+            ...bookmarks.map((bookmark) => `${'  '.repeat(bookmark.depth ?? 0)}${bookmark.title} -> page ${bookmark.page}`),
+        ].join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
+cli
+    .command('fill-form', 'cli.cmd.fill-form')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--set <Name=Value>...', 'cli.opt.set')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const entries = list(options, 'set');
+        if (entries.length === 0) {
+            ctx.fail('open-pdf.cli.set-args', { message: 'at least one `--set Name=Value` is required' });
+            return 2;
+        }
+        const values: Record<string, FormValue> = {};
+        for (const entry of entries) {
+            const separator = entry.indexOf('=');
+            const name = separator < 0 ? '' : entry.slice(0, separator).trim();
+            if (name.length === 0) {
+                ctx.fail('open-pdf.cli.set-args', {
+                    message: `\`--set "${entry}"\` must be "Name=Value" with a non-empty field name`,
+                });
+                return 2;
+            }
+            const raw = entry.slice(separator + 1);
+            values[name] = raw === 'true' ? true : raw === 'false' ? false : raw;
+        }
+        const report = await pdf.fillForm(file, out, values);
+        const human = [
+            `filled ${report.path} pages=${report.pages} filled=${report.filled.length} missing=${report.missing.length}`,
+            ...report.filled.map((name) => `  ${name}`),
+            ...report.missing.map((name) => `  missing ${name}`),
+        ].join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
+cli
     .command('create', 'cli.cmd.create')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--title <title>', 'cli.opt.title')
     .option('--page <line>...', 'cli.opt.page')
+    .option('--page-size <size>', 'cli.opt.page-size')
+    .option('--font <name>', 'cli.opt.font')
+    .option('--font-size <pt>', 'cli.opt.font-size')
+    .option('--margin <pt>', 'cli.opt.margin')
+    .option('--align <align>', 'cli.opt.align')
+    .option('--author <text>', 'cli.opt.author')
+    .option('--subject <text>', 'cli.opt.subject')
+    .option('--keywords <text>', 'cli.opt.keywords')
+    .option('--creator <text>', 'cli.opt.creator')
+    .option('--page-numbers', 'cli.opt.page-numbers')
     .option('--overwrite', 'cli.opt.overwrite')
     .actionCtx(async (options, _args, ctx) => {
         const out = text(options, 'out');
@@ -291,13 +412,98 @@ cli
             ctx.fail('open-pdf.cli.page-required', { message: 'at least one `--page <line>` is required' });
             return 2;
         }
-        const report = service.create({
+        const align = text(options, 'align');
+        if (align !== undefined && align !== 'left' && align !== 'center' && align !== 'right') {
+            ctx.fail('open-pdf.cli.create-style', { message: '`--align` must be `left`, `center` or `right`' });
+            return 2;
+        }
+        const fontSize = decimal(options, 'font-size');
+        if (fontSize === null) {
+            ctx.fail('open-pdf.cli.create-style', { message: '`--font-size <pt>` must be a number' });
+            return 2;
+        }
+        const margin = decimal(options, 'margin');
+        if (margin === null) {
+            ctx.fail('open-pdf.cli.create-style', { message: '`--margin <pt>` must be a number' });
+            return 2;
+        }
+        const report = await pdf.create({
             out,
             title: text(options, 'title'),
             pages,
             overwrite: flag(options, 'overwrite'),
+            pageSize: text(options, 'page-size'),
+            font: text(options, 'font'),
+            fontSize: fontSize ?? undefined,
+            marginPt: margin ?? undefined,
+            align: align as 'left' | 'center' | 'right' | undefined,
+            author: text(options, 'author'),
+            subject: text(options, 'subject'),
+            keywords: text(options, 'keywords'),
+            creator: text(options, 'creator'),
+            pageNumbers: flag(options, 'page-numbers'),
         });
         ctx.emitResult(report, `created ${report.path} pages=${report.pages} bytes=${report.bytes}`);
+        return 0;
+    });
+
+cli
+    .command('stamp', 'cli.cmd.stamp')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--text <text>', 'cli.opt.stamp-text')
+    .option('--position <position>', 'cli.opt.position')
+    .option('--font <name>', 'cli.opt.font')
+    .option('--font-size <pt>', 'cli.opt.font-size')
+    .option('--rotation <degrees>', 'cli.opt.stamp-rotation')
+    .option('--opacity <value>', 'cli.opt.opacity')
+    .option('--color <hex>', 'cli.opt.color')
+    .option('--pages <list>', 'cli.opt.stamp-pages')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const stampText = text(options, 'text');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (stampText === undefined || stampText.length === 0) {
+            ctx.fail('open-pdf.cli.stamp-args', { message: '`--text <text>` is required' });
+            return 2;
+        }
+        const rotation = decimal(options, 'rotation');
+        const opacity = decimal(options, 'opacity');
+        const fontSize = decimal(options, 'font-size');
+        if (rotation === null || opacity === null || fontSize === null) {
+            ctx.fail('open-pdf.cli.stamp-args', {
+                message: '`--rotation`, `--opacity` and `--font-size` must be numbers',
+            });
+            return 2;
+        }
+        const position = text(options, 'position') as
+            | 'center'
+            | 'top'
+            | 'bottom'
+            | 'header'
+            | 'footer'
+            | undefined;
+        const report = await pdf.stamp(file, out, {
+            text: stampText,
+            position,
+            font: text(options, 'font'),
+            fontSize: fontSize ?? undefined,
+            rotation: rotation ?? undefined,
+            opacity: opacity ?? undefined,
+            color: text(options, 'color'),
+            pages: text(options, 'pages'),
+        });
+        ctx.emitResult(
+            report,
+            `stamped ${report.path} pages=${report.pages} stamped=${report.pagesStamped} bytes=${report.bytes}`,
+        );
         return 0;
     });
 
@@ -307,7 +513,7 @@ cli.command('extract-text', 'cli.cmd.extract-text').actionCtx(async (options, _a
         ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
         return 2;
     }
-    const report = service.extractText(file);
+    const report = await pdf.extractText(file);
     const losses = report.losses.map((loss) => `loss ${loss.code} page=${loss.page} ${loss.message}`);
     const human = [report.markdown.length > 0 ? report.markdown : '(no text extracted)', ...losses].join('\n');
     ctx.emitResult(report, human);
@@ -328,7 +534,7 @@ cli
             ctx.fail('open-pdf.cli.image-dir-required', { message: '`--out-dir <dir>` is required' });
             return 2;
         }
-        const images = service.extractImages(file, outDir);
+        const images = await pdf.extractImages(file, outDir);
         const human = images.length === 0
             ? '(no images found)'
             : images

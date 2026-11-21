@@ -104,6 +104,9 @@ export interface PdfCapabilities {
         readonly split: SupportLevel;
         readonly arrange: SupportLevel;
         readonly setMetadata: SupportLevel;
+        readonly setBookmarks: SupportLevel;
+        readonly fillForm: SupportLevel;
+        readonly stamp: SupportLevel;
         readonly extractText: SupportLevel;
         readonly extractImages: SupportLevel;
     };
@@ -185,6 +188,47 @@ export interface SetMetadataReport {
     readonly metadata: PdfMetadata;
 }
 
+/** One bookmark written by `setBookmarks()`. */
+export interface Bookmark {
+    /** Outline title; must not be blank. */
+    readonly title: string;
+    /** One-based destination page, inside `1..=pages`. */
+    readonly page: number;
+    /** Zero-based nesting level, where `0` is a top-level entry. Defaults to 0. */
+    readonly depth?: number;
+}
+
+/** Outline tree accepted by `setBookmarks()`. */
+export interface BookmarkRequest {
+    readonly bookmarks: readonly Bookmark[];
+}
+
+/** Result of `setBookmarks()`. */
+export interface BookmarkReport {
+    readonly path: string;
+    readonly pages: number;
+    readonly bookmarks: number;
+}
+
+/** One value accepted by `fillForm()`. */
+export type FormValue = string | boolean;
+
+/** Field values accepted by `fillForm()`, keyed by fully qualified field name. */
+export interface FormFillRequest {
+    readonly values: Readonly<Record<string, FormValue>>;
+}
+
+/** Result of `fillForm()`. */
+export interface FormFillReport {
+    readonly path: string;
+    /** Requested names that were written, in sorted request order. */
+    readonly filled: readonly string[];
+    /** Requested names that matched no terminal field, in sorted order. */
+    readonly missing: readonly string[];
+    /** Pages copied into the output. */
+    readonly pages: number;
+}
+
 /** Request accepted by `create()`. */
 export interface CreateRequest {
     readonly out: string;
@@ -192,6 +236,50 @@ export interface CreateRequest {
     /** One entry per page. `\n` starts a new line inside the page. */
     readonly pages: readonly string[];
     readonly overwrite?: boolean;
+    /** `a3`, `a4`, `a5`, `letter`, `legal`, `tabloid` or `WIDTHxHEIGHT`. Defaults to Letter. */
+    readonly pageSize?: string;
+    /** `helvetica`, `helvetica-bold`, `times`, `times-bold`, `courier` or `courier-bold`. */
+    readonly font?: string;
+    /** Body font size in points, `6..144`. */
+    readonly fontSize?: number;
+    /** Page margin in points. */
+    readonly marginPt?: number;
+    /** `left`, `center` or `right`. */
+    readonly align?: 'left' | 'center' | 'right';
+    readonly author?: string;
+    readonly subject?: string;
+    readonly keywords?: string;
+    readonly creator?: string;
+    /** Draw a `page / total` footer on every page. */
+    readonly pageNumbers?: boolean;
+}
+
+/** Text stamp accepted by `stamp()`. */
+export interface StampRequest {
+    /** Text to paint; `{page}` and `{pages}` are substituted. */
+    readonly text: string;
+    /** `center` (default), `top`/`header` or `bottom`/`footer`. */
+    readonly position?: 'center' | 'top' | 'bottom' | 'header' | 'footer';
+    /** Base-14 font family, same names as `CreateRequest.font`. */
+    readonly font?: string;
+    /** Font size in points; defaults to 36 centered and 12 otherwise. */
+    readonly fontSize?: number;
+    /** Clockwise rotation for a centered stamp, `-180..180`. */
+    readonly rotation?: number;
+    /** Opacity `0..1`; defaults to 0.3 centered and 0.6 otherwise. */
+    readonly opacity?: number;
+    /** `#RGB` or `#RRGGBB` text colour. */
+    readonly color?: string;
+    /** 1-based page ranges such as `1-3,5`; every page when absent. */
+    readonly pages?: string;
+}
+
+/** Result of `stamp()`. */
+export interface StampReport {
+    readonly path: string;
+    readonly pages: number;
+    readonly pagesStamped: number;
+    readonly bytes: number;
 }
 
 /** Result of `create()`. */

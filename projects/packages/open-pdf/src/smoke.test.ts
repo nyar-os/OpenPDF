@@ -42,6 +42,8 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.splitEvery('input.pdf', 2, 'out'),
         () => OpenPDF.arrange('input.pdf', 'out.pdf', { order: [1] }),
         () => OpenPDF.setMetadata('input.pdf', 'out.pdf', { title: 'x' }),
+        () => OpenPDF.setBookmarks('input.pdf', 'out.pdf', [{ title: 'Intro', page: 1 }]),
+        () => OpenPDF.fillForm('input.pdf', 'out.pdf', { name: 'x' }),
         () => OpenPDF.create({ out: 'new.pdf', pages: ['hello'] }),
         () => OpenPDF.extractText('input.pdf'),
         () => OpenPDF.extractImages('input.pdf', 'images'),

@@ -11,10 +11,14 @@ import { nativeBinding } from './native.js';
 import type {
     ArrangeReport,
     ArrangeRequest,
+    Bookmark,
+    BookmarkReport,
     CreateReport,
     CreateRequest,
     ExtractedImage,
     ExtractReport,
+    FormFillReport,
+    FormValue,
     MergeOptions,
     MergeReport,
     MetadataPatch,
@@ -22,6 +26,8 @@ import type {
     PdfInspectReport,
     SetMetadataReport,
     SplitReport,
+    StampReport,
+    StampRequest,
 } from './types.js';
 
 const knownCodes = new Set<string>(errorCodes);
@@ -109,7 +115,31 @@ export function setMetadata(path: string, out: string, patch: MetadataPatch): Se
     return decode<SetMetadataReport>(() => binding('setMetadata').pdf_set_metadata(path, out, JSON.stringify(patch)));
 }
 
-/** Creates a PDF with one Helvetica text page per request entry. */
+/** Copies every page while replacing the outline tree. */
+export function setBookmarks(path: string, out: string, bookmarks: readonly Bookmark[]): BookmarkReport {
+    return decode<BookmarkReport>(() =>
+        binding('setBookmarks').pdf_set_bookmarks(
+            path,
+            out,
+            JSON.stringify({
+                bookmarks: bookmarks.map((bookmark) => ({
+                    title: bookmark.title,
+                    page: bookmark.page,
+                    depth: bookmark.depth,
+                })),
+            }),
+        ),
+    );
+}
+
+/** Copies every page while filling AcroForm field values. */
+export function fillForm(path: string, out: string, values: Readonly<Record<string, FormValue>>): FormFillReport {
+    return decode<FormFillReport>(() =>
+        binding('fillForm').pdf_fill_form(path, out, JSON.stringify({ values })),
+    );
+}
+
+/** Creates a PDF with one text page per request entry. */
 export function create(request: CreateRequest): CreateReport {
     return decode<CreateReport>(() =>
         binding('create').pdf_create(
@@ -118,6 +148,36 @@ export function create(request: CreateRequest): CreateReport {
                 title: request.title,
                 pages: [...request.pages],
                 overwrite: request.overwrite ?? false,
+                pageSize: request.pageSize,
+                font: request.font,
+                fontSize: request.fontSize,
+                marginPt: request.marginPt,
+                align: request.align,
+                author: request.author,
+                subject: request.subject,
+                keywords: request.keywords,
+                creator: request.creator,
+                pageNumbers: request.pageNumbers,
+            }),
+        ),
+    );
+}
+
+/** Paints a text stamp over the selected pages and writes a new PDF. */
+export function stamp(path: string, out: string, request: StampRequest): StampReport {
+    return decode<StampReport>(() =>
+        binding('stamp').pdf_stamp(
+            path,
+            out,
+            JSON.stringify({
+                text: request.text,
+                position: request.position,
+                font: request.font,
+                fontSize: request.fontSize,
+                rotation: request.rotation,
+                opacity: request.opacity,
+                color: request.color,
+                pages: request.pages,
             }),
         ),
     );

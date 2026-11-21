@@ -9,6 +9,7 @@ repository.workspace = true
 description = "PDF parsing, creation, merge, split and metadata extraction"
 
 [dependencies]
+boost-fs = { workspace = true }
 data-compression = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

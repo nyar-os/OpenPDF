@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
-    CreateRequest, DocumentArrange, MetadataPatch, arrange, capabilities, create, extract_images, extract_text, inspect, merge,
-    set_metadata, split,
+    Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create,
+    extract_images, extract_text, fill_form, inspect, merge, set_bookmarks, set_metadata, split, stamp,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -40,6 +40,7 @@ impl Workspace {
             title: title.map(str::to_string),
             pages: pages.iter().map(|page| (*page).to_string()).collect(),
             overwrite: true,
+            ..CreateRequest::default()
         })
         .expect("create PDF");
         assert_eq!(report.pages, pages.len());
@@ -686,6 +687,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["extractImages"], "supported");
     assert_eq!(matrix["operations"]["arrange"], "supported");
     assert_eq!(matrix["operations"]["setMetadata"], "supported");
+    assert_eq!(matrix["operations"]["fillForm"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
     for color_space in ["deviceGray", "deviceRgb", "deviceCmyk", "indexed"] {
         assert_eq!(color_spaces[color_space], "supported", "{color_space}");
@@ -810,6 +812,175 @@ fn set_metadata_on_corrupt_input_reports_format_invalid_without_panicking() {
     assert_invalid(set_metadata(&broken, &workspace.path("out.pdf"), &MetadataPatch::default()), "format/invalid");
 }
 
+#[test]
+fn create_applies_geometry_font_alignment_metadata_and_page_numbers() {
+    let workspace = Workspace::new();
+    let out = workspace.path("styled.pdf");
+    let report = create(&CreateRequest {
+        out: out.clone(),
+        title: Some("Styled".to_string()),
+        pages: vec!["Centered body text that should wrap when the column is narrow enough".to_string()],
+        overwrite: true,
+        page_size: Some("a4".to_string()),
+        font: Some("times".to_string()),
+        font_size: Some(18.0),
+        margin_pt: Some(54.0),
+        align: Some("center".to_string()),
+        author: Some("Alice".to_string()),
+        subject: Some("Styling".to_string()),
+        keywords: Some("pdf, style".to_string()),
+        page_numbers: Some(true),
+        ..CreateRequest::default()
+    })
+    .expect("styled create");
+
+    assert_eq!(report.pages, 1);
+    let inspected = inspect(&out).expect("inspect styled");
+    assert_eq!(inspected.metadata.title.as_deref(), Some("Styled"));
+    assert_eq!(inspected.metadata.author.as_deref(), Some("Alice"));
+    assert_eq!(inspected.metadata.subject.as_deref(), Some("Styling"));
+    assert_eq!(inspected.metadata.keywords.as_deref(), Some("pdf, style"));
+    assert!((inspected.page_sizes[0].width_pt - 595.28).abs() < 0.01);
+    assert!((inspected.page_sizes[0].height_pt - 841.89).abs() < 0.01);
+
+    let text = extract_text(&out).expect("extract styled");
+    assert!(text.markdown.contains("Centered body text"), "{:?}", text.markdown);
+    assert!(text.markdown.contains("1 / 1"), "page number footer: {:?}", text.markdown);
+}
+
+#[test]
+fn create_paginates_long_page_text() {
+    let workspace = Workspace::new();
+    let out = workspace.path("long.pdf");
+    let lines = (1..=80).map(|index| format!("line {index}")).collect::<Vec<_>>();
+    let report = create(&CreateRequest {
+        out: out.clone(),
+        pages: vec![lines.join("\n")],
+        overwrite: true,
+        page_size: Some("a4".to_string()),
+        ..CreateRequest::default()
+    })
+    .expect("paginated create");
+
+    assert!(report.pages > 1, "80 lines at 12pt need more than one page");
+    assert_eq!(inspect(&out).expect("inspect long").pages, report.pages);
+}
+
+#[test]
+fn create_rejects_invalid_geometry_and_style() {
+    let workspace = Workspace::new();
+    let base = CreateRequest { out: workspace.path("bad.pdf"), pages: vec!["x".to_string()], overwrite: true, ..CreateRequest::default() };
+
+    assert_invalid(create(&CreateRequest { page_size: Some("huge".to_string()), ..base.clone() }), "session/argument-invalid");
+    assert_invalid(create(&CreateRequest { align: Some("middle".to_string()), ..base.clone() }), "session/argument-invalid");
+    assert_invalid(create(&CreateRequest { font: Some("comic".to_string()), ..base.clone() }), "session/argument-invalid");
+    assert_invalid(create(&CreateRequest { font_size: Some(2.0), ..base.clone() }), "session/argument-invalid");
+    assert_invalid(create(&CreateRequest { margin_pt: Some(2.0), ..base }), "session/argument-invalid");
+}
+
+#[test]
+fn stamp_marks_only_the_requested_pages_and_keeps_content() {
+    let workspace = Workspace::new();
+    let path = workspace.create("source.pdf", None, &["Alpha", "Beta"]);
+    let out = workspace.path("stamped.pdf");
+    let report = stamp(
+        &path,
+        &out,
+        &StampRequest {
+            text: "DRAFT {page}/{pages}".to_string(),
+            position: Some("bottom".to_string()),
+            pages: Some("2".to_string()),
+            ..StampRequest::default()
+        },
+    )
+    .expect("stamp");
+
+    assert_eq!(report.pages, 2);
+    assert_eq!(report.pages_stamped, 1);
+    let extracted = extract_text(&out).expect("extract stamped");
+    assert!(extracted.markdown.contains("Alpha"), "{:?}", extracted.markdown);
+    assert!(extracted.markdown.contains("Beta"), "{:?}", extracted.markdown);
+    assert_eq!(extracted.markdown.matches("DRAFT 2/2").count(), 1, "{:?}", extracted.markdown);
+    assert!(!extracted.markdown.contains("DRAFT 1/2"), "page one stays clean: {:?}", extracted.markdown);
+    assert_eq!(inspect(&out).expect("inspect stamped").pages, 2);
+}
+
+#[test]
+fn stamp_validates_text_opacity_and_ranges() {
+    let workspace = Workspace::new();
+    let path = workspace.create("source.pdf", None, &["Only"]);
+    let out = workspace.path("bad-stamp.pdf");
+
+    assert_invalid(stamp(&path, &out, &StampRequest { text: "   ".to_string(), ..StampRequest::default() }), "session/argument-invalid");
+    assert_invalid(
+        stamp(&path, &out, &StampRequest { text: "x".to_string(), opacity: Some(2.0), ..StampRequest::default() }),
+        "session/argument-invalid",
+    );
+    assert_invalid(
+        stamp(&path, &out, &StampRequest { text: "x".to_string(), pages: Some("9".to_string()), ..StampRequest::default() }),
+        "session/argument-invalid",
+    );
+}
+
+#[test]
+fn set_bookmarks_writes_a_readable_outline_tree() {
+    let workspace = Workspace::new();
+    let path = workspace.create("source.pdf", Some("Original"), &["One", "Two"]);
+    let out = workspace.path("outlined.pdf");
+
+    let report = set_bookmarks(
+        &path,
+        &out,
+        &[
+            Bookmark { title: "Intro (start)".to_string(), page: 1, depth: None },
+            Bookmark { title: "Details\\n".to_string(), page: 2, depth: Some(1) },
+            Bookmark { title: "End".to_string(), page: 2, depth: Some(0) },
+        ],
+    )
+    .expect("set bookmarks");
+    assert_eq!(report.pages, 2);
+    assert_eq!(report.bookmarks, 3);
+    assert_eq!(report.path, out.display().to_string());
+
+    let inspected = inspect(&out).expect("inspect bookmarks");
+    assert_eq!(inspected.pages, 2);
+    assert_eq!(inspected.metadata.title.as_deref(), Some("Original"));
+    let entries: Vec<(&str, usize)> =
+        inspected.bookmarks.iter().map(|bookmark| (bookmark.title.as_str(), bookmark.depth)).collect();
+    assert_eq!(entries, [("Intro (start)", 1), ("Details\\n", 2), ("End", 1)]);
+
+    let bytes = fs::read(&out).expect("read outlined PDF");
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("/PageMode /UseOutlines"), "page mode is missing");
+    assert!(text.contains("/Dest ["), "outline destinations are missing");
+    assert!(text.contains("/Fit"), "destination fit type is missing");
+
+    let extracted = extract_text(&out).expect("extract outlined");
+    assert!(extracted.markdown.contains("One"), "{:?}", extracted.markdown);
+    assert!(extracted.markdown.contains("Two"), "{:?}", extracted.markdown);
+}
+
+#[test]
+fn set_bookmarks_rejects_invalid_pages_titles_and_depth() {
+    let workspace = Workspace::new();
+    let path = workspace.create("source.pdf", None, &["One", "Two"]);
+    let out = workspace.path("bad-bookmarks.pdf");
+
+    assert_invalid(
+        set_bookmarks(&path, &out, &[Bookmark { title: "Out".to_string(), page: 3, depth: None }]),
+        "session/argument-invalid",
+    );
+    assert_invalid(
+        set_bookmarks(&path, &out, &[Bookmark { title: "   ".to_string(), page: 1, depth: None }]),
+        "session/argument-invalid",
+    );
+    assert_invalid(
+        set_bookmarks(&path, &out, &[Bookmark { title: "Deep".to_string(), page: 1, depth: Some(64) }]),
+        "session/argument-invalid",
+    );
+    assert_invalid(set_bookmarks(&path, &out, &[]), "session/argument-invalid");
+}
+
 fn flate_image(width: u32, height: u32, color_space: &str, bits: u8, decode: &str, data: &[u8]) -> Vec<u8> {
     let encoded = Zlib::encode(data, DeflateLevel::Default);
     let mut stream = format!(
@@ -903,3 +1074,108 @@ fn extract_images_writes_cmyk_and_indexed_pngs() {
     assert!(icc.path.is_empty());
     assert!(icc.loss.as_deref().unwrap_or("").contains("Indexed"), "{:?}", icc.loss);
 }
+
+/// A one-page form with a nested text field, two buttons (one with `/AP`
+/// states, one without) and a choice field with `/Opt` entries.
+fn fillable_form_pdf() -> Vec<u8> {
+    assemble(&[
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm 8 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [5 0 R 6 0 R] >>",
+        "<< /T (person) /FT /Tx /Kids [5 0 R] >>",
+        "<< /T (name) /Parent 4 0 R /V (Alice) >>",
+        "<< /T (agree) /FT /Btn /V /Off /AP << /N << /Off 10 0 R /Yes 9 0 R >> >> >>",
+        "<< /T (color) /FT /Ch /Opt [(red) (green)] >>",
+        "<< /Fields [4 0 R 6 0 R 7 0 R 12 0 R] /DA (/Helv 0 Tf 0 g) /XFA 11 0 R >>",
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length 0 >>\nstream\n\nendstream",
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length 0 >>\nstream\n\nendstream",
+        "<< /Foo (bar) >>",
+        "<< /T (plain) /FT /Btn /V /Off >>",
+    ])
+}
+
+fn form_field_values(report: &open_pdf_core::InspectReport) -> Vec<(String, Option<String>)> {
+    report.form_fields.iter().map(|field| (field.name.clone(), field.value.clone())).collect()
+}
+
+#[test]
+fn fill_form_writes_text_choice_and_button_values() {
+    let workspace = Workspace::new();
+    let path = workspace.write("form.pdf", &fillable_form_pdf());
+    let out = workspace.path("filled.pdf");
+
+    let source = inspect(&path).expect("inspect form");
+    assert_eq!(
+        form_field_values(&source),
+        vec![
+            ("person.name".to_string(), Some("Alice".to_string())),
+            ("agree".to_string(), Some("Off".to_string())),
+            ("color".to_string(), None),
+            ("plain".to_string(), Some("Off".to_string())),
+        ]
+    );
+
+    let mut values = BTreeMap::new();
+    values.insert("person.name".to_string(), FormValue::Text("Bob Smith".to_string()));
+    values.insert("agree".to_string(), FormValue::Toggle(true));
+    values.insert("color".to_string(), FormValue::Text("green".to_string()));
+    values.insert("plain".to_string(), FormValue::Toggle(true));
+    values.insert("absent".to_string(), FormValue::Text("nothing".to_string()));
+
+    let report = fill_form(&path, &out, &values).expect("fill form");
+    assert_eq!(report.pages, 1);
+    assert_eq!(report.path, out.display().to_string());
+    assert_eq!(report.filled, ["agree", "color", "person.name", "plain"]);
+    assert_eq!(report.missing, ["absent"]);
+
+    let filled = inspect(&out).expect("inspect filled form");
+    assert_eq!(
+        form_field_values(&filled),
+        vec![
+            ("person.name".to_string(), Some("Bob Smith".to_string())),
+            ("agree".to_string(), Some("Yes".to_string())),
+            ("color".to_string(), Some("green".to_string())),
+            ("plain".to_string(), Some("Yes".to_string())),
+        ]
+    );
+
+    let text = String::from_utf8_lossy(&fs::read(&out).expect("read filled PDF")).into_owned();
+    assert!(text.contains("/NeedAppearances true"), "NeedAppearances is missing");
+    assert!(text.contains("/XFA"), "the existing XFA key was dropped");
+    assert!(!text.contains("(Alice)"), "the old text value was kept");
+}
+
+#[test]
+fn fill_form_turns_buttons_off_and_keeps_unknown_names_in_missing() {
+    let workspace = Workspace::new();
+    let path = workspace.write("form.pdf", &fillable_form_pdf());
+    let out = workspace.path("cleared.pdf");
+
+    let mut values = BTreeMap::new();
+    values.insert("agree".to_string(), FormValue::Toggle(false));
+    values.insert("person.name".to_string(), FormValue::Text(String::new()));
+    values.insert("person.unknown".to_string(), FormValue::Text("x".to_string()));
+
+    let report = fill_form(&path, &out, &values).expect("fill form");
+    assert_eq!(report.filled, ["agree", "person.name"]);
+    assert_eq!(report.missing, ["person.unknown"]);
+
+    let filled = inspect(&out).expect("inspect filled form");
+    let fields = form_field_values(&filled);
+    assert_eq!(fields[0], ("person.name".to_string(), Some(String::new())));
+    assert_eq!(fields[1], ("agree".to_string(), Some("Off".to_string())));
+}
+
+#[test]
+fn fill_form_rejects_empty_values_and_blank_field_names() {
+    let workspace = Workspace::new();
+    let path = workspace.write("form.pdf", &fillable_form_pdf());
+    let out = workspace.path("rejected.pdf");
+
+    assert_invalid(fill_form(&path, &out, &BTreeMap::new()), "session/argument-invalid");
+
+    let mut blank = BTreeMap::new();
+    blank.insert("   ".to_string(), FormValue::Text("x".to_string()));
+    assert_invalid(fill_form(&path, &out, &blank), "session/argument-invalid");
+}
+

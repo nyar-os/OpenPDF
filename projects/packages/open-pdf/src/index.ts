@@ -1,18 +1,26 @@
 /**
  * Public SDK of `@wae/open-pdf`.
  *
- * The API is imperative: there is no open document handle and no read/write
- * lifecycle to manage. Call an operation, get a report back.
+ * The session API is the product: `new OpenPDF(options?)` keeps the caller's
+ * defaults, and each method performs one operation and returns a report. There
+ * is no document handle and no read/write lifecycle to manage.
+ *
+ * The static methods are thin compatibility wrappers over the same operations
+ * for callers that do not want a session.
  */
 
 import * as service from './service.js';
 import type {
     ArrangeReport,
     ArrangeRequest,
+    Bookmark,
+    BookmarkReport,
     CreateReport,
     CreateRequest,
     ExtractedImage,
     ExtractReport,
+    FormFillReport,
+    FormValue,
     MergeOptions,
     MergeReport,
     MetadataPatch,
@@ -20,6 +28,8 @@ import type {
     PdfInspectReport,
     SetMetadataReport,
     SplitReport,
+    StampReport,
+    StampRequest,
 } from './types.js';
 
 export { OpenPdfError, NotImplementedError, errorCodes, isOpenPdfError } from './errors.js';
@@ -28,8 +38,90 @@ export { documentFormats, formatFromPath, formatInfo, isPdfPath } from './format
 export type { PdfFormat, PdfFormatInfo } from './formats.js';
 export type * from './types.js';
 
-/** Function collection mirroring the native surface with a class-shaped facade. */
+/** Construction options of an {@link OpenPDF} session. */
+export interface OpenPDFOptions {
+    /** BCP-47 tag used for diagnostics and default copy. */
+    readonly locale?: string;
+    /** Default for operations that may replace an existing output. */
+    readonly overwrite?: boolean;
+}
+
+/** PDF session. One instance carries the caller's defaults; it owns no handle. */
 export class OpenPDF {
+    /** BCP-47 tag used for diagnostics and default copy. */
+    readonly locale: string;
+    private readonly defaultOverwrite: boolean;
+
+    constructor(options: OpenPDFOptions = {}) {
+        this.locale = options.locale ?? 'en';
+        this.defaultOverwrite = options.overwrite ?? false;
+    }
+
+    /** Reads the capability matrix of the installed addon. */
+    async capabilities(): Promise<PdfCapabilities> {
+        return service.capabilities();
+    }
+
+    /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
+    async inspect(path: string): Promise<PdfInspectReport> {
+        return service.inspect(path);
+    }
+
+    /** Concatenates PDF files in the given order. */
+    async merge(inputs: readonly string[], out: string, options: MergeOptions = {}): Promise<MergeReport> {
+        return service.merge(inputs, out, { overwrite: options.overwrite ?? this.defaultOverwrite, title: options.title });
+    }
+
+    /** Splits one PDF into files selected by 1-based ranges. */
+    async split(path: string, ranges: string, outDir: string): Promise<SplitReport> {
+        return service.split(path, ranges, outDir);
+    }
+
+    /** Splits one PDF into consecutive files of at most `every` pages each. */
+    async splitEvery(path: string, every: number, outDir: string): Promise<SplitReport> {
+        return service.splitEvery(path, every, outDir);
+    }
+
+    /** Reorders, removes and rotates pages into a new PDF. */
+    async arrange(path: string, out: string, ops: ArrangeRequest = {}): Promise<ArrangeReport> {
+        return service.arrange(path, out, ops);
+    }
+
+    /** Copies every page while rewriting the information dictionary. */
+    async setMetadata(path: string, out: string, patch: MetadataPatch): Promise<SetMetadataReport> {
+        return service.setMetadata(path, out, patch);
+    }
+
+    /** Copies every page while replacing the outline tree. */
+    async setBookmarks(path: string, out: string, bookmarks: readonly Bookmark[]): Promise<BookmarkReport> {
+        return service.setBookmarks(path, out, bookmarks);
+    }
+
+    /** Copies every page while filling AcroForm field values. */
+    async fillForm(path: string, out: string, values: Readonly<Record<string, FormValue>>): Promise<FormFillReport> {
+        return service.fillForm(path, out, values);
+    }
+
+    /** Creates a PDF with one text page per request entry. */
+    async create(request: CreateRequest): Promise<CreateReport> {
+        return service.create({ ...request, overwrite: request.overwrite ?? this.defaultOverwrite });
+    }
+
+    /** Paints a text stamp over the selected pages and writes a new PDF. */
+    async stamp(path: string, out: string, request: StampRequest): Promise<StampReport> {
+        return service.stamp(path, out, request);
+    }
+
+    /** Extracts text from content streams decoded through their filters. */
+    async extractText(path: string): Promise<ExtractReport> {
+        return service.extractText(path);
+    }
+
+    /** Extracts images from every page into `outDir`. */
+    async extractImages(path: string, outDir: string): Promise<ExtractedImage[]> {
+        return service.extractImages(path, outDir);
+    }
+
     /** Reports the installed addon version. */
     static version(): string {
         return service.version();
@@ -70,9 +162,24 @@ export class OpenPDF {
         return service.setMetadata(path, out, patch);
     }
 
-    /** Creates a PDF with one Helvetica text page per request entry. */
+    /** Copies every page while replacing the outline tree. */
+    static setBookmarks(path: string, out: string, bookmarks: readonly Bookmark[]): BookmarkReport {
+        return service.setBookmarks(path, out, bookmarks);
+    }
+
+    /** Copies every page while filling AcroForm field values. */
+    static fillForm(path: string, out: string, values: Readonly<Record<string, FormValue>>): FormFillReport {
+        return service.fillForm(path, out, values);
+    }
+
+    /** Creates a PDF with one text page per request entry. */
     static create(request: CreateRequest): CreateReport {
         return service.create(request);
+    }
+
+    /** Paints a text stamp over the selected pages and writes a new PDF. */
+    static stamp(path: string, out: string, request: StampRequest): StampReport {
+        return service.stamp(path, out, request);
     }
 
     /** Extracts text from content streams decoded through their filters. */
