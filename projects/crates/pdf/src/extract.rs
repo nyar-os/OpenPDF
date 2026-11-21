@@ -221,6 +221,8 @@ struct ImageCollector<'a> {
 /// Walks every page's `/Resources /XObject` graph and writes each image whose
 /// filter chain this engine can decode.
 ///
+/// 8-bit DeviceGray, DeviceRGB, DeviceCMYK and Indexed images become PNG;
+/// `/Decode` ranges are honoured where the PDF spec requires an inversion.
 /// Images that cannot be decoded are returned with an empty `path` and a
 /// `loss` explanation; a malformed resource entry is skipped rather than
 /// failing the whole document.
@@ -343,13 +345,14 @@ fn handle_image(document: &ParsedDocument, name: &str, stream: &PdfStream, colle
         }
     };
 
-    let channels = match image_colors(document, &stream.dict) {
-        Ok(channels) => channels,
+    let color = match image_color(document, &stream.dict) {
+        Ok(color) => color,
         Err(message) => {
             collector.push_loss(index, name, stream, &filter, &message);
             return Ok(());
         }
     };
+    let channels = color.channels();
     if image_number(document, &stream.dict, "BitsPerComponent").unwrap_or(8) != 8 {
         collector.push_loss(index, name, stream, &filter, "only 8 bits per component images are supported");
         return Ok(());
@@ -377,27 +380,42 @@ fn handle_image(document: &ParsedDocument, name: &str, stream: &PdfStream, colle
         None => None,
     };
 
-    let png = match (channels, alpha) {
-        (1, None) => png_encode(width, height, 0, 1, pixels),
-        (3, None) => png_encode(width, height, 2, 3, pixels),
-        (1, Some(alpha)) => {
-            let mut gray_alpha = Vec::with_capacity(expected * 2);
+    let converted = match color {
+        ImageColor::Gray => PngPixels::Gray(pixels.to_vec()),
+        ImageColor::Rgb => PngPixels::Rgb(pixels.to_vec()),
+        ImageColor::Cmyk => match cmyk_to_rgb(document, &stream.dict, pixels) {
+            Ok(rgb) => PngPixels::Rgb(rgb),
+            Err(message) => {
+                collector.push_loss(index, name, stream, &filter, message);
+                return Ok(());
+            }
+        },
+        ImageColor::Indexed(space) => match indexed_to_rgb(document, &stream.dict, &space, pixels) {
+            Ok(rgb) => PngPixels::Rgb(rgb),
+            Err(message) => {
+                collector.push_loss(index, name, stream, &filter, message);
+                return Ok(());
+            }
+        },
+    };
+
+    let png = match (converted, alpha) {
+        (PngPixels::Gray(pixels), None) => png_encode(width, height, 0, 1, &pixels),
+        (PngPixels::Rgb(pixels), None) => png_encode(width, height, 2, 3, &pixels),
+        (PngPixels::Gray(pixels), Some(alpha)) => {
+            let mut gray_alpha = Vec::with_capacity(pixels.len() * 2);
             for (pixel, value) in pixels.iter().zip(alpha.iter()) {
                 gray_alpha.extend_from_slice(&[*pixel, *value]);
             }
             png_encode(width, height, 4, 2, &gray_alpha)
         }
-        (3, Some(alpha)) => {
-            let mut rgba = Vec::with_capacity(expected / 3 * 4);
+        (PngPixels::Rgb(pixels), Some(alpha)) => {
+            let mut rgba = Vec::with_capacity(pixels.len() / 3 * 4);
             for (pixel, value) in pixels.chunks_exact(3).zip(alpha.iter()) {
                 rgba.extend_from_slice(pixel);
                 rgba.push(*value);
             }
             png_encode(width, height, 6, 4, &rgba)
-        }
-        (_, _) => {
-            collector.push_loss(index, name, stream, &filter, "unsupported color space for PNG output");
-            return Ok(());
         }
     };
 
@@ -425,21 +443,176 @@ fn image_number(document: &ParsedDocument, dict: &Dict, key: &str) -> Option<u32
     u32::try_from(value).ok().filter(|value| *value > 0)
 }
 
-/// Channel count of the color spaces this PNG writer can encode.
-fn image_colors(document: &ParsedDocument, dict: &Dict) -> std::result::Result<usize, String> {
+/// Color spaces this PNG writer can encode.
+enum ImageColor {
+    Gray,
+    Rgb,
+    Cmyk,
+    Indexed(IndexedSpace),
+}
+
+impl ImageColor {
+    fn channels(&self) -> usize {
+        match self {
+            Self::Gray | Self::Indexed(_) => 1,
+            Self::Rgb => 3,
+            Self::Cmyk => 4,
+        }
+    }
+}
+
+/// Palette lookup for `/Indexed` images.
+struct IndexedSpace {
+    /// Components per palette entry: `1` for gray, `3` for RGB.
+    base: usize,
+    /// Highest valid palette index.
+    hival: usize,
+    /// Palette data, `(hival + 1) * base` bytes at minimum.
+    lookup: Vec<u8>,
+}
+
+/// Pixels ready for PNG output.
+enum PngPixels {
+    Gray(Vec<u8>),
+    Rgb(Vec<u8>),
+}
+
+/// Resolves an image `/ColorSpace` into a supported encoding.
+fn image_color(document: &ParsedDocument, dict: &Dict) -> std::result::Result<ImageColor, String> {
     let Some(value) = dict.get("ColorSpace") else {
         return Err("image has no /ColorSpace".to_string());
     };
     let color_space = match resolve_object(&document.objects, value) {
         Ok(PdfObject::Name(name)) => name.as_str(),
-        Ok(_) => return Err("/ColorSpace must be a device color space name".to_string()),
+        Ok(PdfObject::Array(_)) => return indexed_color(document, value),
+        Ok(_) => return Err("/ColorSpace must be a name or an /Indexed array".to_string()),
         Err(error) => return Err(error.message().to_string()),
     };
     match color_space {
-        "DeviceGray" | "G" => Ok(1),
-        "DeviceRGB" | "RGB" => Ok(3),
+        "DeviceGray" | "G" => Ok(ImageColor::Gray),
+        "DeviceRGB" | "RGB" => Ok(ImageColor::Rgb),
+        "DeviceCMYK" | "CMYK" => Ok(ImageColor::Cmyk),
         other => Err(format!("/ColorSpace /{other} is not supported for PNG output")),
     }
+}
+
+fn indexed_color(document: &ParsedDocument, value: &PdfObject) -> std::result::Result<ImageColor, String> {
+    let Ok(PdfObject::Array(items)) = resolve_object(&document.objects, value) else {
+        return Err("/ColorSpace array is unreadable".to_string());
+    };
+    if items.len() < 4 || resolve_object(&document.objects, &items[0]).ok().and_then(PdfObject::as_name) != Some("Indexed")
+    {
+        return Err("/ColorSpace array is not /Indexed".to_string());
+    }
+
+    let base = match resolve_object(&document.objects, &items[1]).ok().and_then(PdfObject::as_name) {
+        Some("DeviceGray") | Some("G") => 1,
+        Some("DeviceRGB") | Some("RGB") => 3,
+        Some(other) => return Err(format!("/Indexed base /{other} is not supported")),
+        None => return Err("/Indexed has no readable base color space".to_string()),
+    };
+    let hival = match resolve_object(&document.objects, &items[2]) {
+        Ok(PdfObject::Integer(value)) if (0..=255).contains(value) => *value as usize,
+        _ => return Err("/Indexed /hival must be an integer between 0 and 255".to_string()),
+    };
+    let lookup = match resolve_object(&document.objects, &items[3]) {
+        Ok(PdfObject::String(bytes)) => bytes.clone(),
+        Ok(PdfObject::Stream(stream)) => {
+            filters::decode(stream, &document.objects).map_err(|error| error.message().to_string())?
+        }
+        _ => return Err("/Indexed lookup table is not a string or a stream".to_string()),
+    };
+    if lookup.len() < (hival + 1).saturating_mul(base) {
+        return Err("/Indexed lookup table is shorter than /hival requires".to_string());
+    }
+    Ok(ImageColor::Indexed(IndexedSpace { base, hival, lookup }))
+}
+
+/// Reads a `/Decode` array, falling back to `default` when absent.
+fn decode_values(document: &ParsedDocument, dict: &Dict, default: &[f64]) -> std::result::Result<Vec<f64>, String> {
+    let Some(value) = dict.get("Decode") else {
+        return Ok(default.to_vec());
+    };
+    let items = match resolve_object(&document.objects, value) {
+        Ok(PdfObject::Array(items)) => items,
+        Ok(_) => return Err("/Decode is not an array".to_string()),
+        Err(error) => return Err(error.message().to_string()),
+    };
+    let mut values = Vec::with_capacity(items.len());
+    for item in items {
+        match resolve_object(&document.objects, item) {
+            Ok(PdfObject::Integer(value)) => values.push(*value as f64),
+            Ok(PdfObject::Real(value)) => values.push(*value),
+            _ => return Err("/Decode holds a non-numeric value".to_string()),
+        }
+    }
+    Ok(values)
+}
+
+/// Maps one 8-bit sample through a decode pair into `0..=1`.
+fn decode_sample(sample: u8, low: f64, high: f64) -> f64 {
+    let value = low + f64::from(sample) / 255.0 * (high - low);
+    value.clamp(0.0, 1.0)
+}
+
+/// Converts `/DeviceCMYK` samples to RGB, inverting first through `/Decode`.
+///
+/// The PDF default `/Decode [1 0 1 0 1 0 1 0]` stores CMYK inverted, so the
+/// conversion happens on the decoded values.
+fn cmyk_to_rgb(document: &ParsedDocument, dict: &Dict, pixels: &[u8]) -> std::result::Result<Vec<u8>, String> {
+    let values = decode_values(document, dict, &[1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0])?;
+    if values.len() < 8 {
+        return Err("/Decode for /DeviceCMYK must hold four pairs".to_string());
+    }
+    let mut rgb = Vec::with_capacity(pixels.len() / 4 * 3);
+    for pixel in pixels.chunks_exact(4) {
+        let c = decode_sample(pixel[0], values[0], values[1]);
+        let m = decode_sample(pixel[1], values[2], values[3]);
+        let y = decode_sample(pixel[2], values[4], values[5]);
+        let k = decode_sample(pixel[3], values[6], values[7]);
+        let red = (255.0 * (1.0 - c) * (1.0 - k)).round().clamp(0.0, 255.0) as u8;
+        let green = (255.0 * (1.0 - m) * (1.0 - k)).round().clamp(0.0, 255.0) as u8;
+        let blue = (255.0 * (1.0 - y) * (1.0 - k)).round().clamp(0.0, 255.0) as u8;
+        rgb.extend_from_slice(&[red, green, blue]);
+    }
+    Ok(rgb)
+}
+
+/// Expands 8-bit `/Indexed` samples through the palette into RGB.
+fn indexed_to_rgb(
+    document: &ParsedDocument,
+    dict: &Dict,
+    space: &IndexedSpace,
+    pixels: &[u8],
+) -> std::result::Result<Vec<u8>, String> {
+    let values = decode_values(document, dict, &[0.0, space.hival as f64])?;
+    if values.len() < 2 {
+        return Err("/Decode for /Indexed must hold a pair".to_string());
+    }
+    let mut rgb = Vec::with_capacity(pixels.len() * 3);
+    for sample in pixels {
+        let mapped = values[0] + f64::from(*sample) / 255.0 * (values[1] - values[0]);
+        let index = mapped.round().clamp(0.0, space.hival as f64) as usize;
+        let offset = index.saturating_mul(space.base);
+        match space.base {
+            1 => {
+                let gray = *space
+                    .lookup
+                    .get(offset)
+                    .ok_or_else(|| "/Indexed lookup table is shorter than /hival requires".to_string())?;
+                rgb.extend_from_slice(&[gray, gray, gray]);
+            }
+            3 => {
+                let entry = space
+                    .lookup
+                    .get(offset..offset + 3)
+                    .ok_or_else(|| "/Indexed lookup table is shorter than /hival requires".to_string())?;
+                rgb.extend_from_slice(entry);
+            }
+            _ => return Err("/Indexed base is not supported".to_string()),
+        }
+    }
+    Ok(rgb)
 }
 
 fn expected_bytes(width: u32, height: u32, channels: usize) -> Option<usize> {

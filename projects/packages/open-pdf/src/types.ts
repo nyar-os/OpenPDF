@@ -86,6 +86,15 @@ export interface PdfCapabilities {
                 readonly tiffPredictor: SupportLevel;
                 readonly other: SupportLevel;
             };
+            readonly image: {
+                readonly colorSpaces: {
+                    readonly deviceGray: SupportLevel;
+                    readonly deviceRgb: SupportLevel;
+                    readonly deviceCmyk: SupportLevel;
+                    readonly indexed: SupportLevel;
+                    readonly other: SupportLevel;
+                };
+            };
         };
     };
     readonly operations: {

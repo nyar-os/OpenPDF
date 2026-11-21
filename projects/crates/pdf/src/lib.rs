@@ -615,6 +615,15 @@ pub fn capabilities() -> serde_json::Value {
                     "pngPredictor": "supported",
                     "tiffPredictor": "supported",
                     "other": "unsupported"
+                },
+                "image": {
+                    "colorSpaces": {
+                        "deviceGray": "supported",
+                        "deviceRgb": "supported",
+                        "deviceCmyk": "supported",
+                        "indexed": "supported",
+                        "other": "unsupported"
+                    }
                 }
             }
         },

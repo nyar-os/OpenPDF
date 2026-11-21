@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use data_compression::{DeflateLevel, Zlib};
+use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     CreateRequest, DocumentArrange, MetadataPatch, arrange, capabilities, create, extract_images, extract_text, inspect,
     merge, set_metadata, split,
@@ -685,6 +685,11 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["formats"]["pdf"]["structures"]["acroForm"], "supported");
     assert_eq!(matrix["operations"]["extractImages"], "supported");
     assert_eq!(matrix["operations"]["arrange"], "supported");
+    assert_eq!(matrix["operations"]["setMetadata"], "supported");
+    let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
+    for color_space in ["deviceGray", "deviceRgb", "deviceCmyk", "indexed"] {
+        assert_eq!(color_spaces[color_space], "supported", "{color_space}");
+    }
 }
 
 #[test]
@@ -813,4 +818,98 @@ fn set_metadata_on_corrupt_input_reports_format_invalid_without_panicking() {
         set_metadata(&broken, &workspace.path("out.pdf"), &MetadataPatch::default()),
         "format/invalid",
     );
+}
+
+fn flate_image(width: u32, height: u32, color_space: &str, bits: u8, decode: &str, data: &[u8]) -> Vec<u8> {
+    let encoded = Zlib::encode(data, DeflateLevel::Default);
+    let mut stream = format!(
+        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /BitsPerComponent {bits} \
+         /ColorSpace {color_space}{decode} /Filter /FlateDecode /Length {} >>\nstream\n",
+        encoded.len()
+    )
+    .into_bytes();
+    stream.extend_from_slice(&encoded);
+    stream.extend_from_slice(b"\nendstream");
+    stream
+}
+
+fn color_image_pdf() -> Vec<u8> {
+    let mut icc_stream = b"<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 \
+        /ColorSpace [/ICCBased 10 0 R] /Filter /FlateDecode /Length "
+        .to_vec();
+    let icc = Zlib::encode(&[0u8, 0, 0], DeflateLevel::Default);
+    icc_stream.extend_from_slice(icc.len().to_string().as_bytes());
+    icc_stream.extend_from_slice(b" >>\nstream\n");
+    icc_stream.extend_from_slice(&icc);
+    icc_stream.extend_from_slice(b"\nendstream");
+
+    assemble_bytes(&[
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] /Resources << /XObject << \
+          /Cmyk 4 0 R /Indexed 5 0 R /IndexedInvert 6 0 R /BadIndexed 7 0 R /Nibble 8 0 R /Icc 9 0 R >> >> >>"
+            .to_vec(),
+        flate_image(1, 1, "/DeviceCMYK", 8, "", &[0, 0, 0, 0]),
+        flate_image(2, 1, "[/Indexed /DeviceRGB 1 <FF000000FF00>]", 8, "", &[0, 255]),
+        flate_image(2, 1, "[/Indexed /DeviceRGB 1 <FF000000FF00>]", 8, " /Decode [1 0]", &[0, 255]),
+        flate_image(1, 1, "[/Indexed /DeviceRGB 4 <FF000000FF00>]", 8, "", &[0]),
+        flate_image(1, 1, "[/Indexed /DeviceGray 15 <00000000000000000000000000000000>]", 4, "", &[0x10]),
+        icc_stream,
+        b"<< /N 3 /Length 0 >>\nstream\n\nendstream".to_vec(),
+    ])
+}
+
+fn png_scanlines(bytes: &[u8]) -> Vec<u8> {
+    let mut position = 8usize;
+    while position + 8 <= bytes.len() {
+        let length = u32::from_be_bytes(bytes[position..position + 4].try_into().expect("chunk length")) as usize;
+        let kind = &bytes[position + 4..position + 8];
+        let data = &bytes[position + 8..position + 8 + length];
+        if kind == b"IDAT" {
+            let limits = CodecLimits::new().with_max_output_bytes(1 << 20);
+            return Zlib::decode(data, limits).expect("inflate PNG IDAT").value;
+        }
+        position += 12 + length;
+    }
+    panic!("PNG has no IDAT chunk");
+}
+
+#[test]
+fn extract_images_writes_cmyk_and_indexed_pngs() {
+    let workspace = Workspace::new();
+    let path = workspace.write("colors.pdf", &color_image_pdf());
+    let images = extract_images(&path, &workspace.path("color-images")).expect("extract color images");
+    assert_eq!(images.len(), 6);
+
+    let cmyk = images.iter().find(|image| image.name == "Cmyk").expect("CMYK image");
+    assert!(cmyk.loss.is_none(), "{:?}", cmyk.loss);
+    assert_eq!((cmyk.width, cmyk.height), (1, 1));
+    let png = fs::read(&cmyk.path).expect("read CMYK PNG");
+    let (width, height, depth, color_type) = png_dimensions(&png);
+    assert_eq!((width, height, depth, color_type), (1, 1, 8, 2));
+    assert_eq!(png_scanlines(&png), vec![0, 0, 0, 0], "inverted CMYK becomes black");
+
+    let indexed = images.iter().find(|image| image.name == "Indexed").expect("Indexed image");
+    assert!(indexed.loss.is_none(), "{:?}", indexed.loss);
+    let png = fs::read(&indexed.path).expect("read Indexed PNG");
+    let (width, height, depth, color_type) = png_dimensions(&png);
+    assert_eq!((width, height, depth, color_type), (2, 1, 8, 2));
+    assert_eq!(png_scanlines(&png), vec![0, 255, 0, 0, 0, 255, 0]);
+
+    let inverted = images.iter().find(|image| image.name == "IndexedInvert").expect("inverted Indexed image");
+    assert!(inverted.loss.is_none(), "{:?}", inverted.loss);
+    let png = fs::read(&inverted.path).expect("read inverted Indexed PNG");
+    assert_eq!(png_scanlines(&png), vec![0, 0, 255, 0, 255, 0, 0], "/Decode reverses palette indices");
+
+    let bad = images.iter().find(|image| image.name == "BadIndexed").expect("bad Indexed image");
+    assert!(bad.path.is_empty());
+    assert!(bad.loss.as_deref().unwrap_or("").contains("lookup"), "{:?}", bad.loss);
+
+    let nibble = images.iter().find(|image| image.name == "Nibble").expect("4-bit image");
+    assert!(nibble.path.is_empty());
+    assert!(nibble.loss.as_deref().unwrap_or("").contains("8 bits"), "{:?}", nibble.loss);
+
+    let icc = images.iter().find(|image| image.name == "Icc").expect("ICCBased image");
+    assert!(icc.path.is_empty());
+    assert!(icc.loss.as_deref().unwrap_or("").contains("Indexed"), "{:?}", icc.loss);
 }
