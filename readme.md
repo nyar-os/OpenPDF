@@ -1,68 +1,85 @@
 # OpenPDF
 
-![PDF](https://img.shields.io/badge/format-pdf-blue)
-![Merge/Split](https://img.shields.io/badge/merge%20%7C%20split-built--in-brightgreen)
+![PDF 1.7](https://img.shields.io/badge/format-PDF%201.7-blue)
+![Merge Split Create](https://img.shields.io/badge/merge%20%7C%20split%20%7C%20create-built--in-brightgreen)
+![No PDF library](https://img.shields.io/badge/PDF%20library-none-lightgrey)
 
-CLI/SDK for PDF generation, merge, split, and metadata extraction. The processing engine handles all formats internally, exposing a native bridge to Node.js consumers and end users.
+Generate, merge, split and inspect PDF files from one command line or one small
+SDK. The built-in engine parses the page tree, metadata and outlines itself and
+writes standard PDF 1.7 files — no external PDF library, no Adobe Acrobat, no
+system dependency.
 
-Key differentiators: multi-PDF concatenation and page-range splitting, plus programmatic PDF creation from scratch — none of these require an external PDF library or Adobe Acrobat.
+## ✨ What you can do
 
-## 🧩 Architecture
+- Create a text PDF from scratch with A4 pages and Helvetica text.
+- Merge any number of PDFs and keep their page order.
+- Split by 1-based ranges such as `1-5,10,15-20`.
+- Read version, page count, page geometry, document metadata and bookmarks.
+- Extract text from uncompressed content streams and report every skipped part.
 
-```mermaid
-graph LR
-    A[PDF files] --> B[OpenPDF Repo]
-    B --> C[Native bridge]
-    C --> D[Document processing engine]
-```
-
-## What's NOT here
-
-- **No PDF implementation** — PDF grammar, page tree, content stream encoding, font embedding, and incremental updates all belong in the shared engine.
-- **No text extraction or OCR** — glyph-level text extraction from content streams lives in the engine; OCR is out of scope for this product.
-- **No merge/split algorithms** — page tree rewiring, content stream concatenation, and resource deduplication are core engine logic.
-- **No fixture corpus** — golden PDFs, conformance fixtures, and round-trip acceptance scripts live downstream.
-
-## 🚀 Usage (placeholder)
+## 🚀 Usage
 
 ```bash
-# Extract metadata — title, author, bookmarks, page count
+# Read version, pages, metadata, page sizes and outlines
 open-pdf inspect input.pdf
 
-# Merge multiple PDFs into one
-open-pdf merge a.pdf b.pdf c.pdf -o combined.pdf
+# Merge files in argument order
+open-pdf merge cover.pdf chapter-1.pdf chapter-2.pdf -o combined.pdf
 
-# Split by page range
-open-pdf split input.pdf --ranges 1-5,10,15-20 -o output/
+# Split into page-range files: input-p1-5.pdf, input-p10.pdf, ...
+open-pdf split input.pdf --ranges 1-5,10 --out-dir pages/
 
-# Create a PDF programmatically
-open-pdf create --out empty.pdf --title "Empty Deck" --pages 1
+# Create two A4 pages; | separates lines inside one page
+open-pdf create --out notes.pdf --title "Meeting notes" \
+  --page "Agenda|1. Budget|2. Timeline" \
+  --page "Decisions"
+
+# Extract text and list extraction losses
+open-pdf extract-text notes.pdf
 ```
+
+The same operations are available as an imperative SDK:
 
 ```ts
 import { OpenPDF } from '@wae/open-pdf';
 
-const doc = await OpenPDF.read('input.pdf');
-console.log(doc.metadata.title, doc.pageCount);
+const info = OpenPDF.inspect('input.pdf');
+console.log(info.version, info.pages, info.metadata.title);
 
-// Extract a page range into a new document
-const sliced = doc.slice({ from: 10, to: 20 });
-await sliced.write('pages-10-20.pdf');
+OpenPDF.merge(['a.pdf', 'b.pdf'], 'combined.pdf', { title: 'Combined' });
+OpenPDF.split('combined.pdf', '1-2,3', 'pages');
+OpenPDF.create({ out: 'hello.pdf', title: 'Hello', pages: ['line one\nline two'] });
 
-// Concatenate multiple PDFs
-const combined = await OpenPDF.concat([
-  await OpenPDF.read('a.pdf'),
-  await OpenPDF.read('b.pdf'),
-]);
-await combined.write('combined.pdf');
+const text = OpenPDF.extractText('hello.pdf');
+console.log(text.markdown, text.losses);
 ```
 
-## 🧱 Repo layout
+`open-pdf capabilities` prints the honest support matrix, including what is
+partial and what is not supported at all.
 
-```
-OpenPDF/
-├── package.json
-└── Readme.md
+## 🧩 How it works
+
+```mermaid
+flowchart LR
+    A[PDF files] --> B[Parser<br/>objects, xref, page tree]
+    B --> C{Operation}
+    C -->|inspect| D[Metadata, geometry and outline report]
+    C -->|merge / split| E[Page copier<br/>shared resources deduplicated]
+    C -->|create| F[Text page composer]
+    E --> G[Standard PDF 1.7 writer]
+    F --> G
+    B --> H[Text extraction<br/>uncompressed streams]
 ```
 
-This is a scaffold repo. The native bridge wiring, CLI binary, and CLI entry points are added incrementally as the shared processing engine lands.
+## 🧱 What it does NOT do
+
+- **No encrypted PDFs** — files with `/Encrypt` are rejected, never decrypted.
+- **No cross-reference streams** — classic xref tables only; PDF 1.5+ xref
+  streams are reported as unsupported.
+- **No rendering or rasterization** — no PNG, SVG or print preview output.
+- **No compressed text extraction** — Flate/LZW content streams are listed as
+  losses instead of being guessed.
+- **No form filling, JavaScript, digital signatures or repair of broken files** —
+  malformed input returns a stable error code instead of a best-effort document.
+- **No font embedding** — created documents use the built-in Helvetica font and
+  WinAnsi-compatible text.
