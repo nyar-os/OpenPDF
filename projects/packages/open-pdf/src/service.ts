@@ -79,6 +79,11 @@ export function split(path: string, ranges: string, outDir: string): SplitReport
     return decode<SplitReport>(() => binding('split').pdf_split(path, ranges, outDir));
 }
 
+/** Splits one PDF into consecutive files of at most `every` pages each. */
+export function splitEvery(path: string, every: number, outDir: string): SplitReport {
+    return decode<SplitReport>(() => binding('splitEvery').pdf_split_every(path, every, outDir));
+}
+
 /** Creates a PDF with one Helvetica text page per request entry. */
 export function create(request: CreateRequest): CreateReport {
     return decode<CreateReport>(() =>

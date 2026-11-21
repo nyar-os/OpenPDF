@@ -252,6 +252,25 @@ pub fn split(path: &Path, ranges: &str, out_dir: &Path) -> Result<SplitReport> {
     Ok(SplitReport { documents })
 }
 
+/// Splits one PDF into consecutive files of at most `every` pages each.
+pub fn split_every(path: &Path, every: usize, out_dir: &Path) -> Result<SplitReport> {
+    if every == 0 {
+        return Err(argument("split --every needs at least one page per file"));
+    }
+    let document = load_document(path)?;
+    prepare_out_dir(out_dir)?;
+    let stem = document_stem(path);
+    let total = document.pages.len();
+    let mut documents = Vec::new();
+    let mut start = 1usize;
+    while start <= total {
+        let end = start.saturating_add(every - 1).min(total);
+        documents.push(write_part(&document, out_dir, &stem, start, end)?);
+        start = end + 1;
+    }
+    Ok(SplitReport { documents })
+}
+
 fn prepare_out_dir(out_dir: &Path) -> Result<()> {
     fs::create_dir_all(out_dir).map_err(|error| write_error(format!("cannot create {}: {error}", out_dir.display())))
 }

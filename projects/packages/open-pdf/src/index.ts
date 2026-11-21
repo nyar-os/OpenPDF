@@ -50,6 +50,11 @@ export class OpenPDF {
         return service.split(path, ranges, outDir);
     }
 
+    /** Splits one PDF into consecutive files of at most `every` pages each. */
+    static splitEvery(path: string, every: number, outDir: string): SplitReport {
+        return service.splitEvery(path, every, outDir);
+    }
+
     /** Creates a PDF with one Helvetica text page per request entry. */
     static create(request: CreateRequest): CreateReport {
         return service.create(request);

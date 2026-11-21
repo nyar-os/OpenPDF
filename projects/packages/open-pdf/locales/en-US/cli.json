@@ -5,9 +5,9 @@
             "capabilities": "Print what this build supports, honestly",
             "inspect": "Show version, pages, metadata, page sizes and outlines",
             "merge": "Concatenate PDF files in argument order",
-            "split": "Write one file per page range",
+            "split": "Write one file per page range or per N pages",
             "create": "Create a PDF with Helvetica text pages",
-            "extract-text": "Extract text from uncompressed content streams"
+            "extract-text": "Extract text from content streams, including Flate-compressed ones"
         },
         "opt": {
             "out": "Output file",
@@ -15,6 +15,7 @@
             "overwrite": "Replace the output file when it already exists",
             "out-dir": "Directory for split files",
             "ranges": "Comma-separated 1-based ranges, e.g. 1-5,10,15-20",
+            "every": "Split into consecutive files of N pages each",
             "page": "Page text; use | for a line break (repeatable)"
         }
     }

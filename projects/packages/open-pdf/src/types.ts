@@ -53,6 +53,18 @@ export interface PdfCapabilities {
             readonly import: SupportLevel;
             readonly extract: SupportLevel;
             readonly export: SupportLevel;
+            readonly structures: {
+                readonly classicXref: SupportLevel;
+                readonly xrefStream: SupportLevel;
+                readonly objectStream: SupportLevel;
+                readonly encrypted: SupportLevel;
+            };
+            readonly filters: {
+                readonly flateDecode: SupportLevel;
+                readonly pngPredictor: SupportLevel;
+                readonly tiffPredictor: SupportLevel;
+                readonly other: SupportLevel;
+            };
         };
     };
     readonly operations: {

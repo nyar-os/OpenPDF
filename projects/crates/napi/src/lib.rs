@@ -82,6 +82,18 @@ fn pdf_split(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Splits one PDF into consecutive files of at most `every` pages.
+#[function]
+fn pdf_split_every(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let every = argument(&ctx, 1)?.as_i64()?;
+    let every = usize::try_from(every).map_err(|_| Error::new("session/argument-invalid: --every must be positive"))?;
+    let out_dir = text(&ctx, 2)?;
+    let report =
+        open_pdf_core::split_every(std::path::Path::new(&path), every, std::path::Path::new(&out_dir)).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Creates a PDF from a JSON request.
 #[function]
 fn pdf_create(ctx: CallContext) -> Result<JsValue> {
@@ -98,4 +110,4 @@ fn pdf_extract_text(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::extract_text(std::path::Path::new(&path)).map_err(failure)?)
 }
 
-register_module![version, capabilities, pdf_inspect, pdf_merge, pdf_split, pdf_create, pdf_extract_text];
+register_module![version, capabilities, pdf_inspect, pdf_merge, pdf_split, pdf_split_every, pdf_create, pdf_extract_text];

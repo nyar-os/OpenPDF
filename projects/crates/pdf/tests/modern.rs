@@ -1,9 +1,9 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{DeflateLevel, Zlib};
-use open_pdf_core::{extract_text, inspect, merge};
+use open_pdf_core::{extract_text, inspect, merge, split_every};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -296,6 +296,30 @@ fn merge_keeps_modern_pdf_page_order() {
     let aaa = extracted.markdown.find("AAA modern").expect("AAA");
     let bbb = extracted.markdown.find("BBB modern").expect("BBB");
     assert!(aaa < bbb, "pages are out of order: {:?}", extracted.markdown);
+}
+
+#[test]
+fn split_every_groups_consecutive_pages_of_a_modern_pdf() {
+    let workspace = Workspace::new();
+    let bytes = build_modern_pdf(&ModernPdf::new("Five", &["One", "Two", "Three", "Four", "Five"]));
+    let path = workspace.write("five.pdf", &bytes);
+
+    let out_dir = workspace.path("chunks");
+    let report = split_every(&path, 2, &out_dir).expect("split every two pages");
+    assert_eq!(report.documents.len(), 3);
+    let pages: Vec<usize> = report.documents.iter().map(|part| part.pages).collect();
+    assert_eq!(pages, [2, 2, 1]);
+    assert!(report.documents[0].path.ends_with("five-p1-2.pdf"));
+    assert!(report.documents[1].path.ends_with("five-p3-4.pdf"));
+    assert!(report.documents[2].path.ends_with("five-p5.pdf"));
+
+    for part in &report.documents {
+        let inspected = inspect(Path::new(&part.path)).expect("inspect split part");
+        assert_eq!(inspected.pages, part.pages);
+    }
+    let first_text = extract_text(Path::new(&report.documents[0].path)).expect("extract first chunk");
+    assert!(first_text.markdown.contains("One") && first_text.markdown.contains("Two"));
+    assert!(!first_text.markdown.contains("Three"));
 }
 
 #[test]

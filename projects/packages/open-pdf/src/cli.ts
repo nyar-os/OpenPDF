@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createCli, type ParsedOptions } from '@wae/commander';
 
 import * as service from './service.js';
-import type { PdfCapabilities, PdfInspectReport } from './types.js';
+import type { PdfCapabilities, PdfInspectReport, SplitReport } from './types.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,9 +50,17 @@ function describeCapabilities(matrix: PdfCapabilities): string {
     const renderers = Object.entries(matrix.renderers)
         .map(([name, level]) => `${name}=${level}`)
         .join(', ');
+    const structures = Object.entries(pdf.structures)
+        .map(([name, level]) => `${name}=${level}`)
+        .join(', ');
+    const filters = Object.entries(pdf.filters)
+        .map(([name, level]) => `${name}=${level}`)
+        .join(', ');
     return [
         `engine: ${matrix.engine.package} ${matrix.engine.version}`,
         `pdf: import=${pdf.import} extract=${pdf.extract} export=${pdf.export}`,
+        `structures: ${structures}`,
+        `filters: ${filters}`,
         `operations: ${operations}`,
         `checks: ${checks}`,
         `renderers: ${renderers}`,
@@ -123,22 +131,40 @@ cli
 cli
     .command('split', 'cli.cmd.split')
     .option('--ranges <list>', 'cli.opt.ranges')
+    .option('--every <count>', 'cli.opt.every')
     .option('-o, --out-dir <dir>', 'cli.opt.out-dir')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const ranges = text(options, 'ranges');
+        const every = text(options, 'every');
         const outDir = text(options, 'out-dir');
         if (file === undefined) {
             ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
             return 2;
         }
-        if (ranges === undefined || outDir === undefined) {
+        if (outDir === undefined) {
             ctx.fail('open-pdf.cli.split-args', {
-                message: '`--ranges <list>` and `--out-dir <dir>` are required',
+                message: '`--out-dir <dir>` is required',
             });
             return 2;
         }
-        const report = service.split(file, ranges, outDir);
+        if ((ranges === undefined) === (every === undefined)) {
+            ctx.fail('open-pdf.cli.split-args', {
+                message: 'exactly one of `--ranges <list>` and `--every <count>` is required',
+            });
+            return 2;
+        }
+        let report: SplitReport;
+        if (every !== undefined) {
+            const count = Number(every);
+            if (!Number.isSafeInteger(count) || count < 1) {
+                ctx.fail('open-pdf.cli.split-args', { message: '`--every <count>` must be a positive integer' });
+                return 2;
+            }
+            report = service.splitEvery(file, count, outDir);
+        } else {
+            report = service.split(file, ranges as string, outDir);
+        }
         ctx.emitResult(
             report,
             report.documents.map((part) => `${part.path} pages=${part.pages}`).join('\n'),
