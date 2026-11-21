@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create,
-    extract_images, extract_text, fill_form, inspect, merge, set_bookmarks, set_metadata, split, stamp,
+    extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, set_bookmarks, set_metadata, split, stamp,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -96,6 +96,31 @@ fn create_then_inspect_reports_pages_title_and_a4_geometry() {
         assert_eq!(page.rotation, 0);
     }
     assert!(report.bookmarks.is_empty());
+}
+
+#[test]
+fn inspect_bytes_reports_a_document_without_a_path() {
+    let workspace = Workspace::new();
+    let path = workspace.create("memory.pdf", Some("In memory"), &["Alpha"]);
+    let bytes = fs::read(&path).expect("read created PDF");
+
+    let report = inspect_bytes(&bytes).expect("inspect bytes");
+    assert_eq!(report.label, "<memory>");
+    assert_eq!(report.version, "1.7");
+    assert_eq!(report.pages, 1);
+    assert_eq!(report.metadata.title.as_deref(), Some("In memory"));
+}
+
+#[test]
+fn extract_text_bytes_reads_a_document_without_a_path() {
+    let workspace = Workspace::new();
+    let path = workspace.create("memory.pdf", None, &["Alpha", "Beta"]);
+    let bytes = fs::read(&path).expect("read created PDF");
+
+    let report = extract_text_bytes(&bytes).expect("extract bytes");
+    assert_eq!(report.pages, 2);
+    assert!(report.markdown.contains("Alpha"), "page one text: {}", report.markdown);
+    assert!(report.markdown.contains("Beta"), "page two text: {}", report.markdown);
 }
 
 #[test]
