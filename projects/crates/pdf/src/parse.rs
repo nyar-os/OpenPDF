@@ -172,9 +172,12 @@ fn read_trailer(data: &[u8], offset: usize) -> Result<Dict> {
     // cross-reference stream, which this engine deliberately does not decode.
     if parser.try_indirect_header()?.is_some() {
         let object = parser.parse_object(0)?;
-        if let Some(dict) = object.as_dict()
-            && dict.get("Type").and_then(PdfObject::as_name) == Some("XRef")
-        {
+        let object_type = match &object {
+            PdfObject::Dictionary(dict) => dict.get("Type").and_then(PdfObject::as_name),
+            PdfObject::Stream(stream) => stream.dict.get("Type").and_then(PdfObject::as_name),
+            _ => None,
+        };
+        if object_type == Some("XRef") {
             return Err(unsupported("xref streams / encrypted PDF not supported: cross-reference stream"));
         }
         return Err(invalid("startxref does not point to a cross-reference table"));

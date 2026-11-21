@@ -48,6 +48,38 @@ fn assert_invalid<T: std::fmt::Debug>(result: Result<T, open_pdf_core::ServiceEr
     assert_eq!(error.code(), expected, "unexpected error: {error}");
 }
 
+fn assemble(objects: &[&str]) -> Vec<u8> {
+    let mut output = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, body) in objects.iter().enumerate() {
+        offsets.push(output.len());
+        output.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = output.len();
+    output.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        output.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    output.extend_from_slice(
+        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes(),
+    );
+    output
+}
+
+fn assemble_xref_stream(objects: &[&str], xref_object: u32) -> Vec<u8> {
+    let mut output = b"%PDF-1.7\n".to_vec();
+    let mut target = 0;
+    for (index, body) in objects.iter().enumerate() {
+        let number = index as u32 + 1;
+        if number == xref_object {
+            target = output.len();
+        }
+        output.extend_from_slice(format!("{number} 0 obj\n{body}\nendobj\n").as_bytes());
+    }
+    output.extend_from_slice(format!("startxref\n{target}\n%%EOF\n").as_bytes());
+    output
+}
+
 #[test]
 fn create_then_inspect_reports_pages_title_and_a4_geometry() {
     let workspace = Workspace::new();
@@ -188,4 +220,47 @@ fn range_syntax_rejects_zero_reversed_and_out_of_bounds() {
     for ranges in ["", "0", "3", "2-1", "1,", "first"] {
         assert_invalid(split(&path, ranges, &out_dir), "session/argument-invalid");
     }
+}
+
+#[test]
+fn inspect_reads_nested_outlines_and_inherited_page_attributes() {
+    let workspace = Workspace::new();
+    let path = workspace.path("outlined.pdf");
+    let bytes = assemble(&[
+        "<< /Type /Catalog /Pages 2 0 R /Outlines 5 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] /Rotate 90 >>",
+        "<< /Type /Page /Parent 2 0 R >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        "<< /Type /Outlines /First 6 0 R /Last 8 0 R /Count 3 >>",
+        "<< /Title (Intro) /Parent 5 0 R /First 7 0 R /Next 8 0 R >>",
+        "<< /Title (Details) /Parent 6 0 R >>",
+        "<< /Title (End) /Parent 5 0 R /Next 6 0 R >>",
+    ]);
+    fs::write(&path, bytes).expect("write outlined PDF");
+
+    let report = inspect(&path).expect("inspect outlined PDF");
+    assert_eq!(report.pages, 1);
+    assert_eq!(report.page_sizes[0].width_pt, 300.0);
+    assert_eq!(report.page_sizes[0].height_pt, 400.0);
+    assert_eq!(report.page_sizes[0].rotation, 90);
+    let bookmarks: Vec<(&str, usize)> =
+        report.bookmarks.iter().map(|bookmark| (bookmark.title.as_str(), bookmark.depth)).collect();
+    assert_eq!(bookmarks, [("Intro", 1), ("Details", 2), ("End", 1)]);
+}
+
+#[test]
+fn xref_stream_is_rejected_as_unsupported() {
+    let workspace = Workspace::new();
+    let path = workspace.path("xref-stream.pdf");
+    let bytes = assemble_xref_stream(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [] /Count 0 >>",
+            "<< /Type /XRef /Size 3 /W [1 2 1] /Root 1 0 R /Length 0 >>\nstream\nendstream",
+        ],
+        3,
+    );
+    fs::write(&path, bytes).expect("write xref stream PDF");
+
+    assert_invalid(inspect(&path), "format/unsupported");
 }
