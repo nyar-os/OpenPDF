@@ -7,7 +7,7 @@ use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
     extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks,
-    set_metadata, split, stamp,
+    set_metadata, set_page_boxes, split, stamp,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -714,6 +714,9 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["arrange"], "supported");
     assert_eq!(matrix["operations"]["setMetadata"], "supported");
     assert_eq!(matrix["operations"]["fillForm"], "supported");
+    assert_eq!(matrix["operations"]["deletePages"], "supported");
+    assert_eq!(matrix["operations"]["rotatePages"], "supported");
+    assert_eq!(matrix["operations"]["setPageBoxes"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
     for color_space in ["deviceGray", "deviceRgb", "deviceCmyk", "indexed"] {
         assert_eq!(color_spaces[color_space], "supported", "{color_space}");
@@ -833,6 +836,30 @@ fn rotate_pages_rotates_only_the_selected_pages() {
     assert_eq!(inspected.page_sizes[1].rotation, 180);
 
     assert_invalid(rotate_pages(&path, "1", 45, &out, true), "session/argument-invalid");
+}
+
+#[test]
+fn set_page_boxes_writes_the_crop_box_of_the_selected_pages() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two"]);
+    let out = workspace.path("cropped.pdf");
+
+    let report = set_page_boxes(&path, "1", [10.0, 20.0, 300.0, 400.0], &out, false).expect("set page boxes");
+    assert_eq!(report.pages, 2);
+    assert_eq!(report.cropped, 1);
+    assert!(report.bytes > 0);
+
+    let inspected = inspect(&out).expect("inspect cropped");
+    assert_eq!(inspected.pages, 2);
+    assert_eq!(inspected.page_sizes[0].width_pt, 612.0);
+    assert_eq!(inspected.page_sizes[0].height_pt, 792.0);
+
+    let bytes = fs::read(&out).expect("read cropped");
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("/CropBox [10 20 300 400]"), "crop box is missing");
+
+    assert_invalid(set_page_boxes(&path, "1", [300.0, 20.0, 10.0, 400.0], &out, true), "session/argument-invalid");
+    assert_invalid(set_page_boxes(&path, "1", [0.0, 0.0, 700.0, 400.0], &out, true), "session/argument-invalid");
 }
 
 #[test]

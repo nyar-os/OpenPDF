@@ -134,6 +134,22 @@ fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Writes a `/CropBox` on the selected pages of one PDF file.
+#[function]
+fn pdf_set_page_boxes(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let raw = text(&ctx, 2)?;
+    let crop: [f64; 4] =
+        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+    let out = text(&ctx, 3)?;
+    let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report =
+        open_pdf_core::set_page_boxes(std::path::Path::new(&path), &pages, crop, std::path::Path::new(&out), overwrite)
+            .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Copies every page while rewriting the information dictionary.
 #[function]
 fn pdf_set_metadata(ctx: CallContext) -> Result<JsValue> {
@@ -233,6 +249,7 @@ register_module![
     pdf_arrange,
     pdf_delete_pages,
     pdf_rotate_pages,
+    pdf_set_page_boxes,
     pdf_set_metadata,
     pdf_set_bookmarks,
     pdf_fill_form,
