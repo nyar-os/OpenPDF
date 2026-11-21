@@ -19,6 +19,7 @@ export interface NativeBinding {
     pdf_split(path: string, ranges: string, outDir: string): string;
     pdf_split_every(path: string, every: number, outDir: string): string;
     pdf_arrange(path: string, out: string, opsJson: string): string;
+    pdf_set_metadata(path: string, out: string, patchJson: string): string;
     pdf_create(requestJson: string): string;
     pdf_extract_text(path: string): string;
     pdf_extract_images(path: string, outDir: string): string;

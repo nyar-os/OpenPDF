@@ -233,6 +233,48 @@ cli
     });
 
 cli
+    .command('set-metadata', 'cli.cmd.set-metadata')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--title <text>', 'cli.opt.title')
+    .option('--author <text>', 'cli.opt.author')
+    .option('--subject <text>', 'cli.opt.subject')
+    .option('--keywords <text>', 'cli.opt.keywords')
+    .option('--creator <text>', 'cli.opt.creator')
+    .option('--producer <text>', 'cli.opt.producer')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const report = service.setMetadata(file, out, {
+            title: text(options, 'title'),
+            author: text(options, 'author'),
+            subject: text(options, 'subject'),
+            keywords: text(options, 'keywords'),
+            creator: text(options, 'creator'),
+            producer: text(options, 'producer'),
+        });
+        const metadata = report.metadata;
+        const human = [
+            `updated ${report.path} pages=${report.pages}`,
+            `title: ${metadata.title ?? '(none)'}`,
+            `author: ${metadata.author ?? '(none)'}`,
+            `subject: ${metadata.subject ?? '(none)'}`,
+            `keywords: ${metadata.keywords ?? '(none)'}`,
+            `creator: ${metadata.creator ?? '(none)'}`,
+            `producer: ${metadata.producer ?? '(none)'}`,
+        ].join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
+cli
     .command('create', 'cli.cmd.create')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--title <title>', 'cli.opt.title')

@@ -15,8 +15,10 @@ import type {
     ExtractReport,
     MergeOptions,
     MergeReport,
+    MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    SetMetadataReport,
     SplitReport,
 } from './types.js';
 
@@ -61,6 +63,11 @@ export class OpenPDF {
     /** Reorders, removes and rotates pages into a new PDF. */
     static arrange(path: string, out: string, ops: ArrangeRequest = {}): ArrangeReport {
         return service.arrange(path, out, ops);
+    }
+
+    /** Copies every page while rewriting the information dictionary. */
+    static setMetadata(path: string, out: string, patch: MetadataPatch): SetMetadataReport {
+        return service.setMetadata(path, out, patch);
     }
 
     /** Creates a PDF with one Helvetica text page per request entry. */

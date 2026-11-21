@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{DeflateLevel, Zlib};
 use open_pdf_core::{
-    CreateRequest, DocumentArrange, arrange, capabilities, create, extract_images, extract_text, inspect, merge, split,
+    CreateRequest, DocumentArrange, MetadataPatch, arrange, capabilities, create, extract_images, extract_text, inspect,
+    merge, set_metadata, split,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -763,6 +764,53 @@ fn arrange_on_corrupt_input_reports_format_invalid_without_panicking() {
     let broken = workspace.write("broken-arrange.pdf", b"not a PDF");
     assert_invalid(
         arrange(&broken, &workspace.path("out.pdf"), &DocumentArrange::default()),
+        "format/invalid",
+    );
+}
+
+#[test]
+fn set_metadata_overrides_preserves_and_deletes_fields() {
+    let workspace = Workspace::new();
+    let path = workspace.create("source.pdf", Some("Original"), &["One", "Two"]);
+
+    let out = workspace.path("patched.pdf");
+    let report = set_metadata(
+        &path,
+        &out,
+        &MetadataPatch {
+            title: Some("Rewritten".to_string()),
+            author: Some("Alice".to_string()),
+            producer: Some(String::new()),
+            ..MetadataPatch::default()
+        },
+    )
+    .expect("set metadata");
+    assert_eq!(report.pages, 2);
+    assert_eq!(report.metadata.title.as_deref(), Some("Rewritten"));
+    assert_eq!(report.metadata.author.as_deref(), Some("Alice"));
+    assert_eq!(report.metadata.producer, None);
+
+    let inspected = inspect(&out).expect("inspect patched");
+    assert_eq!(inspected.pages, 2);
+    assert_eq!(inspected.metadata.title.as_deref(), Some("Rewritten"));
+    assert_eq!(inspected.metadata.author.as_deref(), Some("Alice"));
+    assert_eq!(inspected.metadata.producer, None);
+    assert_eq!(inspected.metadata.subject, None);
+
+    let kept = workspace.path("kept.pdf");
+    let report = set_metadata(&path, &kept, &MetadataPatch { author: Some("Bob".to_string()), ..MetadataPatch::default() })
+        .expect("partial metadata");
+    assert_eq!(report.metadata.title.as_deref(), Some("Original"));
+    assert_eq!(report.metadata.producer.as_deref(), Some("OpenPDF"));
+    assert_eq!(report.metadata.author.as_deref(), Some("Bob"));
+}
+
+#[test]
+fn set_metadata_on_corrupt_input_reports_format_invalid_without_panicking() {
+    let workspace = Workspace::new();
+    let broken = workspace.write("broken-metadata.pdf", b"%PDF-1.7\nnot really");
+    assert_invalid(
+        set_metadata(&broken, &workspace.path("out.pdf"), &MetadataPatch::default()),
         "format/invalid",
     );
 }

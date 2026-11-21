@@ -94,6 +94,7 @@ export interface PdfCapabilities {
         readonly merge: SupportLevel;
         readonly split: SupportLevel;
         readonly arrange: SupportLevel;
+        readonly setMetadata: SupportLevel;
         readonly extractText: SupportLevel;
         readonly extractImages: SupportLevel;
     };
@@ -152,6 +153,27 @@ export interface ArrangeRequest {
 export interface ArrangeReport {
     readonly path: string;
     readonly pages: number;
+}
+
+/**
+ * `/Info` fields accepted by `setMetadata()`.
+ *
+ * A missing field keeps its source value, an empty string removes it.
+ */
+export interface MetadataPatch {
+    readonly title?: string;
+    readonly author?: string;
+    readonly subject?: string;
+    readonly keywords?: string;
+    readonly creator?: string;
+    readonly producer?: string;
+}
+
+/** Result of `setMetadata()`. */
+export interface SetMetadataReport {
+    readonly path: string;
+    readonly pages: number;
+    readonly metadata: PdfMetadata;
 }
 
 /** Request accepted by `create()`. */

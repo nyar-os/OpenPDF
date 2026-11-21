@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Result, argument, exists_error, read_error, write_error};
 use crate::object::{Dict, PdfObject};
 use crate::parse::{ParsedDocument, decode_text_string, parse_document, resolve_object};
-use crate::writer::{DocWriter, copy_info, copy_page, copy_page_with_rotation};
+use crate::writer::{DocWriter, copy_info, copy_info_fields, copy_page, copy_page_with_rotation};
 
 pub use crate::error::ServiceError;
 
@@ -227,6 +227,44 @@ pub struct ArrangeReport {
     pub pages: usize,
 }
 
+/// `/Info` fields accepted by [`set_metadata`].
+///
+/// A missing field keeps its source value, while an empty string removes it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetadataPatch {
+    /// `/Title` replacement.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// `/Author` replacement.
+    #[serde(default)]
+    pub author: Option<String>,
+    /// `/Subject` replacement.
+    #[serde(default)]
+    pub subject: Option<String>,
+    /// `/Keywords` replacement.
+    #[serde(default)]
+    pub keywords: Option<String>,
+    /// `/Creator` replacement.
+    #[serde(default)]
+    pub creator: Option<String>,
+    /// `/Producer` replacement.
+    #[serde(default)]
+    pub producer: Option<String>,
+}
+
+/// Result of [`set_metadata`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMetadataReport {
+    /// Output path.
+    pub path: String,
+    /// Pages copied into the output.
+    pub pages: usize,
+    /// Metadata of the written file, read back from disk.
+    pub metadata: PdfMetadata,
+}
+
 /// One text fragment that could not be extracted.
 #[derive(Debug, Clone, Serialize)]
 pub struct ExtractLoss {
@@ -381,6 +419,46 @@ pub fn arrange(input: &Path, out: &Path, ops: &DocumentArrange) -> Result<Arrang
     let bytes = finish_document(&mut writer, &pages, info)?;
     write_file(out, &bytes, true)?;
     Ok(ArrangeReport { path: out.display().to_string(), pages: pages.len() })
+}
+
+/// Copies every page into a new PDF while rewriting its information
+/// dictionary.
+///
+/// Fields absent from `patch` keep their source value and an empty string
+/// removes the field. The output file is replaced when it already exists.
+pub fn set_metadata(input: &Path, out: &Path, patch: &MetadataPatch) -> Result<SetMetadataReport> {
+    let document = load_document(input)?;
+
+    let mut writer = DocWriter::new();
+    let mut map = BTreeMap::new();
+    let mut pages = Vec::with_capacity(document.pages.len());
+    for page in &document.pages {
+        pages.push(copy_page(&mut writer, &document, &mut map, page)?);
+    }
+
+    let mut edits: Vec<(&str, Option<&str>)> = Vec::new();
+    for (key, value) in [
+        ("Title", &patch.title),
+        ("Author", &patch.author),
+        ("Subject", &patch.subject),
+        ("Keywords", &patch.keywords),
+        ("Creator", &patch.creator),
+        ("Producer", &patch.producer),
+    ] {
+        if let Some(text) = value {
+            edits.push((key, if text.is_empty() { None } else { Some(text.as_str()) }));
+        }
+    }
+    let info = copy_info_fields(&mut writer, &document, &mut map, &edits)?;
+    let bytes = finish_document(&mut writer, &pages, info)?;
+    write_file(out, &bytes, true)?;
+
+    let written = parse_document(&bytes)?;
+    Ok(SetMetadataReport {
+        path: out.display().to_string(),
+        pages: pages.len(),
+        metadata: read_metadata(&written)?,
+    })
 }
 
 /// Validates the 1-based indices of [`DocumentArrange`] and returns the input
@@ -546,6 +624,7 @@ pub fn capabilities() -> serde_json::Value {
             "merge": "supported",
             "split": "supported",
             "arrange": "supported",
+            "setMetadata": "supported",
             "extractText": "partial",
             "extractImages": "supported"
         },

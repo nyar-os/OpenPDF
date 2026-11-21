@@ -347,6 +347,20 @@ pub(crate) fn copy_info(
     map: &mut BTreeMap<u32, u32>,
     title: Option<&str>,
 ) -> Result<Option<u32>> {
+    let edits: Vec<(&str, Option<&str>)> = title.map(|title| vec![("Title", Some(title))]).unwrap_or_default();
+    copy_info_fields(writer, source, map, &edits)
+}
+
+/// Copies the document information dictionary, applying keyed edits.
+///
+/// `Some(text)` replaces a field, `None` removes it. Fields not present in
+/// `edits` keep their source value.
+pub(crate) fn copy_info_fields(
+    writer: &mut DocWriter,
+    source: &ParsedDocument,
+    map: &mut BTreeMap<u32, u32>,
+    edits: &[(&str, Option<&str>)],
+) -> Result<Option<u32>> {
     let mut dict = match source.info {
         Some(number) => match source.objects.get(&number) {
             Some(object) => match copy_object(writer, source, map, object)? {
@@ -357,8 +371,15 @@ pub(crate) fn copy_info(
         },
         None => Dict::new(),
     };
-    if let Some(title) = title {
-        dict.insert("Title".to_string(), PdfObject::String(encode_text(title)));
+    for (key, value) in edits {
+        match value {
+            Some(text) => {
+                dict.insert((*key).to_string(), PdfObject::String(encode_text(text)));
+            }
+            None => {
+                dict.remove(*key);
+            }
+        }
     }
     if dict.is_empty() {
         return Ok(None);

@@ -17,8 +17,10 @@ import type {
     ExtractReport,
     MergeOptions,
     MergeReport,
+    MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    SetMetadataReport,
     SplitReport,
 } from './types.js';
 
@@ -100,6 +102,11 @@ export function arrange(path: string, out: string, ops: ArrangeRequest = {}): Ar
             }),
         ),
     );
+}
+
+/** Copies every page while rewriting the information dictionary. */
+export function setMetadata(path: string, out: string, patch: MetadataPatch): SetMetadataReport {
+    return decode<SetMetadataReport>(() => binding('setMetadata').pdf_set_metadata(path, out, JSON.stringify(patch)));
 }
 
 /** Creates a PDF with one Helvetica text page per request entry. */
