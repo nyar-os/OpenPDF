@@ -10,9 +10,9 @@
 pub use document_pdf::{
     ArrangeReport, Bookmark, BookmarkReport, CreateReport, CreateRequest, DeletePagesReport, DocumentArrange, ExtractLoss,
     ExtractReport, ExtractedImage, FormFillReport, FormValue, InspectReport, MergeReport, MetadataPatch, PdfBookmark, PdfFormField,
-    PdfMetadata, PdfPageSize, ServiceError, SetMetadataReport, SplitPart, SplitReport, StampReport, StampRequest, arrange, create,
-    delete_pages, extract_images, extract_images_bytes, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge,
-    set_bookmarks, set_metadata, split, split_every, stamp,
+    PdfMetadata, PdfPageSize, RotatePagesReport, ServiceError, SetMetadataReport, SplitPart, SplitReport, StampReport,
+    StampRequest, arrange, create, delete_pages, extract_images, extract_images_bytes, extract_text, extract_text_bytes, fill_form,
+    inspect, inspect_bytes, merge, rotate_pages, set_bookmarks, set_metadata, split, split_every, stamp,
 };
 
 /// Reports what this build actually supports.
@@ -62,6 +62,7 @@ pub fn capabilities() -> serde_json::Value {
             "split": "supported",
             "arrange": "supported",
             "deletePages": "supported",
+            "rotatePages": "supported",
             "setMetadata": "supported",
             "setBookmarks": "supported",
             "fillForm": "supported",

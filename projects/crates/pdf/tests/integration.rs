@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
-    extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, set_bookmarks, set_metadata, split,
-    stamp,
+    extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks,
+    set_metadata, split, stamp,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -814,6 +814,25 @@ fn delete_pages_writes_the_surviving_pages() {
 
     assert_invalid(delete_pages(&path, "1-3", &out, true), "session/argument-invalid");
     assert_invalid(delete_pages(&path, "9", &out, true), "session/argument-invalid");
+}
+
+#[test]
+fn rotate_pages_rotates_only_the_selected_pages() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two"]);
+    let out = workspace.path("rotated.pdf");
+
+    let report = rotate_pages(&path, "2", 180, &out, false).expect("rotate pages");
+    assert_eq!(report.pages, 2);
+    assert_eq!(report.rotated, 1);
+    assert!(report.bytes > 0);
+
+    let inspected = inspect(&out).expect("inspect rotated");
+    assert_eq!(inspected.pages, 2);
+    assert_eq!(inspected.page_sizes[0].rotation, 0);
+    assert_eq!(inspected.page_sizes[1].rotation, 180);
+
+    assert_invalid(rotate_pages(&path, "1", 45, &out, true), "session/argument-invalid");
 }
 
 #[test]

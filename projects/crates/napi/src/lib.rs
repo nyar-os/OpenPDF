@@ -119,6 +119,21 @@ fn pdf_delete_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Adds a clockwise rotation to the selected pages of one PDF file.
+#[function]
+fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let degrees = argument(&ctx, 2)?.as_i64()?;
+    let degrees =
+        i32::try_from(degrees).map_err(|_| Error::new("session/argument-invalid: degrees must be 90, 180 or 270"))?;
+    let out = text(&ctx, 3)?;
+    let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::rotate_pages(std::path::Path::new(&path), &pages, degrees, std::path::Path::new(&out), overwrite)
+        .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Copies every page while rewriting the information dictionary.
 #[function]
 fn pdf_set_metadata(ctx: CallContext) -> Result<JsValue> {
@@ -217,6 +232,7 @@ register_module![
     pdf_split_every,
     pdf_arrange,
     pdf_delete_pages,
+    pdf_rotate_pages,
     pdf_set_metadata,
     pdf_set_bookmarks,
     pdf_fill_form,
