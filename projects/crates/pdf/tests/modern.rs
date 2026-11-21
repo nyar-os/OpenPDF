@@ -350,6 +350,24 @@ fn truncated_modern_input_reports_an_error_without_panicking() {
 }
 
 #[test]
+fn corrupt_flate_xref_stream_reports_an_error_without_panicking() {
+    let workspace = Workspace::new();
+    let mut bytes = build_modern_pdf(&ModernPdf::new("Corrupt", &["Corrupt body"]));
+    let marker = find_sub(&bytes, b"/Type /XRef").expect("xref marker");
+    let stream = find_sub(&bytes[marker..], b"stream\n").expect("xref stream start") + marker + b"stream\n".len();
+    let end = find_sub(&bytes[stream..], b"\nendstream").expect("xref stream end") + stream;
+    bytes[stream..end].fill(0);
+
+    let path = workspace.write("corrupt-xref.pdf", &bytes);
+    let error = inspect(&path).expect_err("corrupt xref stream must fail");
+    assert_eq!(error.code(), "format/invalid");
+}
+
+fn find_sub(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|window| window == needle)
+}
+
+#[test]
 fn encrypted_xref_stream_is_still_rejected() {
     let workspace = Workspace::new();
     let mut spec = ModernPdf::new("Encrypted modern", &["Secret"]);
