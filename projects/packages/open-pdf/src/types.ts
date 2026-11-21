@@ -34,6 +34,20 @@ export interface PdfBookmark {
     readonly depth: number;
 }
 
+/** One terminal AcroForm field. */
+export interface FormField {
+    /** Fully qualified name built from the `/T` chain, such as `person.name`. */
+    readonly name: string;
+    /** Inherited `/FT` value (`Tx`, `Btn`, `Ch`, `Sig`), or `null`. */
+    readonly type: string | null;
+    /** `/V` as a text or name value, or `null`. */
+    readonly value: string | null;
+    /** Bit 1 of the inherited `/Ff` flags. */
+    readonly readOnly: boolean;
+    /** Bit 2 of the inherited `/Ff` flags. */
+    readonly required: boolean;
+}
+
 /** Result of `inspect()`. */
 export interface PdfInspectReport {
     readonly label: string;
@@ -43,6 +57,8 @@ export interface PdfInspectReport {
     readonly metadata: PdfMetadata;
     readonly pageSizes: readonly PdfPageSize[];
     readonly bookmarks: readonly PdfBookmark[];
+    readonly formFields: readonly FormField[];
+    readonly warnings: readonly string[];
 }
 
 /** What the installed engine can do. */
@@ -57,10 +73,15 @@ export interface PdfCapabilities {
                 readonly classicXref: SupportLevel;
                 readonly xrefStream: SupportLevel;
                 readonly objectStream: SupportLevel;
+                readonly acroForm: SupportLevel;
                 readonly encrypted: SupportLevel;
             };
             readonly filters: {
                 readonly flateDecode: SupportLevel;
+                readonly asciiHexDecode: SupportLevel;
+                readonly ascii85Decode: SupportLevel;
+                readonly runLengthDecode: SupportLevel;
+                readonly lzwDecode: SupportLevel;
                 readonly pngPredictor: SupportLevel;
                 readonly tiffPredictor: SupportLevel;
                 readonly other: SupportLevel;
@@ -73,6 +94,7 @@ export interface PdfCapabilities {
         readonly merge: SupportLevel;
         readonly split: SupportLevel;
         readonly extractText: SupportLevel;
+        readonly extractImages: SupportLevel;
     };
     readonly checks: {
         readonly metadata: SupportLevel;
@@ -140,4 +162,24 @@ export interface ExtractReport {
     readonly pages: number;
     readonly markdown: string;
     readonly losses: readonly ExtractLoss[];
+}
+
+/** One image reached through a page's `/Resources /XObject` graph. */
+export interface ExtractedImage {
+    /** One-based page number. */
+    readonly page: number;
+    /** One-based image index within the page. */
+    readonly index: number;
+    /** Resource name used by the page or Form XObject. */
+    readonly name: string;
+    /** Pixel width, `0` when the dictionary is unreadable. */
+    readonly width: number;
+    /** Pixel height, `0` when the dictionary is unreadable. */
+    readonly height: number;
+    /** Filter chain such as `DCTDecode` or `FlateDecode`, or `none`. */
+    readonly filter: string;
+    /** Written file path; empty when nothing was written. */
+    readonly path: string;
+    /** Why the image was skipped or only partially decoded. */
+    readonly loss?: string;
 }

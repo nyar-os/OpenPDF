@@ -81,6 +81,13 @@ function describeInspect(report: PdfInspectReport): string {
             lines.push(`${'  '.repeat(Math.max(0, bookmark.depth - 1))}${bookmark.title}`);
         }
     }
+    for (const field of report.formFields) {
+        const flags = [field.readOnly ? 'readonly' : '', field.required ? 'required' : ''].filter(Boolean).join(' ');
+        lines.push(`field ${field.name} type=${field.type ?? '(none)'} value=${field.value ?? '(none)'}${flags ? ` ${flags}` : ''}`);
+    }
+    for (const warning of report.warnings) {
+        lines.push(`warning: ${warning}`);
+    }
     return lines.join('\n');
 }
 
@@ -211,6 +218,34 @@ cli.command('extract-text', 'cli.cmd.extract-text').actionCtx(async (options, _a
     ctx.emitResult(report, human);
     return 0;
 });
+
+cli
+    .command('extract-images', 'cli.cmd.extract-images')
+    .option('-o, --out-dir <dir>', 'cli.opt.image-dir')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const outDir = text(options, 'out-dir');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (outDir === undefined) {
+            ctx.fail('open-pdf.cli.image-dir-required', { message: '`--out-dir <dir>` is required' });
+            return 2;
+        }
+        const images = service.extractImages(file, outDir);
+        const human = images.length === 0
+            ? '(no images found)'
+            : images
+                  .map((image) =>
+                      image.path === ''
+                          ? `loss page=${image.page} name=${image.name} ${image.loss ?? ''}`
+                          : `${image.path} ${image.width}x${image.height} ${image.filter}`,
+                  )
+                  .join('\n');
+        ctx.emitResult(images, human);
+        return 0;
+    });
 
 const entry = process.argv[1];
 if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {

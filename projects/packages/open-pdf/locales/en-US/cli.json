@@ -7,13 +7,15 @@
             "merge": "Concatenate PDF files in argument order",
             "split": "Write one file per page range or per N pages",
             "create": "Create a PDF with Helvetica text pages",
-            "extract-text": "Extract text from content streams, including Flate-compressed ones"
+            "extract-text": "Extract text from content streams, including compressed ones",
+            "extract-images": "Write embedded JPEG and PNG-encodable images to a directory"
         },
         "opt": {
             "out": "Output file",
             "title": "Document title",
             "overwrite": "Replace the output file when it already exists",
             "out-dir": "Directory for split files",
+            "image-dir": "Directory for extracted images",
             "ranges": "Comma-separated 1-based ranges, e.g. 1-5,10,15-20",
             "every": "Split into consecutive files of N pages each",
             "page": "Page text; use | for a line break (repeatable)"

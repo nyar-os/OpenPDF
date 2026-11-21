@@ -20,6 +20,7 @@ export interface NativeBinding {
     pdf_split_every(path: string, every: number, outDir: string): string;
     pdf_create(requestJson: string): string;
     pdf_extract_text(path: string): string;
+    pdf_extract_images(path: string, outDir: string): string;
 }
 
 let cached: NativeBinding | null | undefined;

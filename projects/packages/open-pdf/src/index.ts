@@ -9,6 +9,7 @@ import * as service from './service.js';
 import type {
     CreateReport,
     CreateRequest,
+    ExtractedImage,
     ExtractReport,
     MergeOptions,
     MergeReport,
@@ -60,8 +61,13 @@ export class OpenPDF {
         return service.create(request);
     }
 
-    /** Extracts text from uncompressed content streams. */
+    /** Extracts text from content streams decoded through their filters. */
     static extractText(path: string): ExtractReport {
         return service.extractText(path);
+    }
+
+    /** Extracts images from every page into `outDir`. */
+    static extractImages(path: string, outDir: string): ExtractedImage[] {
+        return service.extractImages(path, outDir);
     }
 }

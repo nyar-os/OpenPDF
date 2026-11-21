@@ -42,6 +42,7 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.splitEvery('input.pdf', 2, 'out'),
         () => OpenPDF.create({ out: 'new.pdf', pages: ['hello'] }),
         () => OpenPDF.extractText('input.pdf'),
+        () => OpenPDF.extractImages('input.pdf', 'images'),
     ];
     for (const call of calls) {
         assert.throws(call, (error: unknown) => {

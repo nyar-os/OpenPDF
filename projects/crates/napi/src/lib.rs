@@ -110,4 +110,22 @@ fn pdf_extract_text(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::extract_text(std::path::Path::new(&path)).map_err(failure)?)
 }
 
-register_module![version, capabilities, pdf_inspect, pdf_merge, pdf_split, pdf_split_every, pdf_create, pdf_extract_text];
+/// Extracts images from one PDF file into a directory.
+#[function]
+fn pdf_extract_images(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out_dir = text(&ctx, 1)?;
+    respond(&ctx, &open_pdf_core::extract_images(std::path::Path::new(&path), std::path::Path::new(&out_dir)).map_err(failure)?)
+}
+
+register_module![
+    version,
+    capabilities,
+    pdf_inspect,
+    pdf_merge,
+    pdf_split,
+    pdf_split_every,
+    pdf_create,
+    pdf_extract_text,
+    pdf_extract_images
+];

@@ -11,6 +11,7 @@ import { nativeBinding } from './native.js';
 import type {
     CreateReport,
     CreateRequest,
+    ExtractedImage,
     ExtractReport,
     MergeOptions,
     MergeReport,
@@ -98,7 +99,12 @@ export function create(request: CreateRequest): CreateReport {
     );
 }
 
-/** Extracts text from uncompressed content streams. */
+/** Extracts text from content streams decoded through their filters. */
 export function extractText(path: string): ExtractReport {
     return decode<ExtractReport>(() => binding('extractText').pdf_extract_text(path));
+}
+
+/** Extracts images from every page into `outDir`. */
+export function extractImages(path: string, outDir: string): ExtractedImage[] {
+    return decode<ExtractedImage[]>(() => binding('extractImages').pdf_extract_images(path, outDir));
 }
