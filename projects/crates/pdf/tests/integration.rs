@@ -5,8 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
-    Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create,
-    extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, set_bookmarks, set_metadata, split, stamp,
+    Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
+    extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, set_bookmarks, set_metadata, split,
+    stamp,
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -791,6 +792,28 @@ fn arrange_on_corrupt_input_reports_format_invalid_without_panicking() {
     let workspace = Workspace::new();
     let broken = workspace.write("broken-arrange.pdf", b"not a PDF");
     assert_invalid(arrange(&broken, &workspace.path("out.pdf"), &DocumentArrange::default()), "format/invalid");
+}
+
+#[test]
+fn delete_pages_writes_the_surviving_pages() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
+    let out = workspace.path("kept.pdf");
+
+    let report = delete_pages(&path, "2", &out, false).expect("delete pages");
+    assert_eq!(report.pages, 2);
+    assert_eq!(report.removed, 1);
+    assert!(report.bytes > 0);
+
+    let inspected = inspect(&out).expect("inspect output");
+    assert_eq!(inspected.pages, 2);
+    let extracted = extract_text(&out).expect("extract output");
+    assert!(extracted.markdown.contains("One"), "{:?}", extracted.markdown);
+    assert!(extracted.markdown.contains("Three"), "{:?}", extracted.markdown);
+    assert!(!extracted.markdown.contains("Two"), "{:?}", extracted.markdown);
+
+    assert_invalid(delete_pages(&path, "1-3", &out, true), "session/argument-invalid");
+    assert_invalid(delete_pages(&path, "9", &out, true), "session/argument-invalid");
 }
 
 #[test]

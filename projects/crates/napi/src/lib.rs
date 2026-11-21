@@ -106,6 +106,19 @@ fn pdf_arrange(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Removes the selected pages from one PDF file.
+#[function]
+fn pdf_delete_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let out = text(&ctx, 2)?;
+    let overwrite = ctx.args().get(3).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report =
+        open_pdf_core::delete_pages(std::path::Path::new(&path), &pages, std::path::Path::new(&out), overwrite)
+            .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Copies every page while rewriting the information dictionary.
 #[function]
 fn pdf_set_metadata(ctx: CallContext) -> Result<JsValue> {
@@ -203,6 +216,7 @@ register_module![
     pdf_split,
     pdf_split_every,
     pdf_arrange,
+    pdf_delete_pages,
     pdf_set_metadata,
     pdf_set_bookmarks,
     pdf_fill_form,
