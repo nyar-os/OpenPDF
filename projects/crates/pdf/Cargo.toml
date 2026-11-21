@@ -1,0 +1,13 @@
+[package]
+name = "open-pdf-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "PDF parsing, creation, merge, split and metadata extraction"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
