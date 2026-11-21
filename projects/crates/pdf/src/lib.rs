@@ -11,6 +11,7 @@
 
 mod create;
 mod error;
+mod extract;
 mod object;
 mod parse;
 mod writer;
@@ -149,6 +150,28 @@ pub struct CreateReport {
     pub bytes: usize,
 }
 
+/// One text fragment that could not be extracted.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExtractLoss {
+    /// Stable loss code.
+    pub code: String,
+    /// One-based page number.
+    pub page: usize,
+    /// Human-readable explanation.
+    pub message: String,
+}
+
+/// Result of [`extract_text`].
+#[derive(Debug, Clone, Serialize)]
+pub struct ExtractReport {
+    /// Page count of the source document.
+    pub pages: usize,
+    /// Extracted text with pages separated by blank lines.
+    pub markdown: String,
+    /// Everything the extractor skipped, never silent.
+    pub losses: Vec<ExtractLoss>,
+}
+
 /// Reads a PDF and reports its version, page geometry, metadata and outlines.
 pub fn inspect(path: &Path) -> Result<InspectReport> {
     let document = load_document(path)?;
@@ -253,6 +276,24 @@ pub fn create(request: &CreateRequest) -> Result<CreateReport> {
     let bytes = create::build(request.title.as_deref(), &request.pages)?;
     write_file(&request.out, &bytes, request.overwrite)?;
     Ok(CreateReport { path: request.out.display().to_string(), pages: request.pages.len(), bytes: bytes.len() })
+}
+
+/// Extracts text from uncompressed content streams.
+///
+/// Compressed streams are reported in [`ExtractReport::losses`] instead of
+/// being approximated; see [`capabilities`] for the disclosed support level.
+pub fn extract_text(path: &Path) -> Result<ExtractReport> {
+    let document = load_document(path)?;
+    let extraction = extract::extract(&document)?;
+    Ok(ExtractReport {
+        pages: document.pages.len(),
+        markdown: extraction.markdown,
+        losses: extraction
+            .losses
+            .into_iter()
+            .map(|loss| ExtractLoss { code: loss.code, page: loss.page, message: loss.message })
+            .collect(),
+    })
 }
 
 /// Reports what this build actually supports.
