@@ -379,9 +379,7 @@ fn decode_utf16(bytes: &[u8], big_endian: bool) -> String {
         .as_chunks::<2>()
         .0
         .iter()
-        .map(|pair| {
-            if big_endian { u16::from_be_bytes(*pair) } else { u16::from_le_bytes(*pair) }
-        })
+        .map(|pair| if big_endian { u16::from_be_bytes(*pair) } else { u16::from_le_bytes(*pair) })
         .collect();
     char::decode_utf16(units).map(|unit| unit.unwrap_or('\u{FFFD}')).collect()
 }

@@ -185,8 +185,11 @@ pub fn inspect(path: &Path) -> Result<InspectReport> {
             rotation: page.rotation,
         })
         .collect();
-    let bookmarks =
-        document.bookmarks.iter().map(|bookmark| PdfBookmark { title: bookmark.title.clone(), depth: bookmark.depth }).collect();
+    let bookmarks = document
+        .bookmarks
+        .iter()
+        .map(|bookmark| PdfBookmark { title: bookmark.title.clone(), depth: bookmark.depth })
+        .collect();
     Ok(InspectReport {
         label: label_of(path),
         version: document.version.clone(),
@@ -238,8 +241,7 @@ pub fn merge(inputs: &[PathBuf], out: &Path, overwrite: bool, title: Option<&str
 pub fn split(path: &Path, ranges: &str, out_dir: &Path) -> Result<SplitReport> {
     let document = load_document(path)?;
     let ranges = parse_ranges(ranges, document.pages.len())?;
-    fs::create_dir_all(out_dir)
-        .map_err(|error| write_error(format!("cannot create {}: {error}", out_dir.display())))?;
+    fs::create_dir_all(out_dir).map_err(|error| write_error(format!("cannot create {}: {error}", out_dir.display())))?;
     let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("document");
 
     let mut documents = Vec::with_capacity(ranges.len());
@@ -253,11 +255,7 @@ pub fn split(path: &Path, ranges: &str, out_dir: &Path) -> Result<SplitReport> {
         let info = copy_info(&mut writer, &document, &mut map, None)?;
         let bytes = finish_document(&mut writer, &pages, info)?;
 
-        let name = if start == end {
-            format!("{stem}-p{start}.pdf")
-        } else {
-            format!("{stem}-p{start}-{end}.pdf")
-        };
+        let name = if start == end { format!("{stem}-p{start}.pdf") } else { format!("{stem}-p{start}-{end}.pdf") };
         let target = out_dir.join(name);
         write_file(&target, &bytes, true)?;
         documents.push(SplitPart { path: target.display().to_string(), pages: pages.len() });
@@ -331,8 +329,7 @@ pub fn capabilities() -> serde_json::Value {
 }
 
 fn load_document(path: &Path) -> Result<ParsedDocument> {
-    let bytes =
-        fs::read(path).map_err(|error| read_error(format!("cannot read {}: {error}", path.display())))?;
+    let bytes = fs::read(path).map_err(|error| read_error(format!("cannot read {}: {error}", path.display())))?;
     parse_document(&bytes)
 }
 
@@ -372,10 +369,8 @@ fn finish_document(writer: &mut DocWriter, pages: &[u32], info: Option<u32>) -> 
     let pages_number = writer.reserve();
     let mut pages_tree = Dict::new();
     pages_tree.insert("Type".to_string(), PdfObject::Name("Pages".to_string()));
-    pages_tree.insert(
-        "Kids".to_string(),
-        PdfObject::Array(pages.iter().map(|number| PdfObject::Reference(*number, 0)).collect()),
-    );
+    pages_tree
+        .insert("Kids".to_string(), PdfObject::Array(pages.iter().map(|number| PdfObject::Reference(*number, 0)).collect()));
     pages_tree.insert("Count".to_string(), PdfObject::Integer(pages.len() as i64));
     writer.set(pages_number, PdfObject::Dictionary(pages_tree));
 
@@ -423,8 +418,7 @@ fn write_file(path: &Path, bytes: &[u8], overwrite: bool) -> Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
-        fs::create_dir_all(parent)
-            .map_err(|error| write_error(format!("cannot create {}: {error}", parent.display())))?;
+        fs::create_dir_all(parent).map_err(|error| write_error(format!("cannot create {}: {error}", parent.display())))?;
     }
     fs::write(path, bytes).map_err(|error| write_error(format!("cannot write {}: {error}", path.display())))
 }
