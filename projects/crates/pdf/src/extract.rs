@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use data_compression::{Crc32, DeflateLevel, Zlib};
+use media_codec::PngColor;
 
 use crate::ExtractedImage;
 use crate::error::{Result, invalid, write_error};
@@ -399,15 +399,15 @@ fn handle_image(document: &ParsedDocument, name: &str, stream: &PdfStream, colle
         },
     };
 
-    let png = match (converted, alpha) {
-        (PngPixels::Gray(pixels), None) => png_encode(width, height, 0, 1, &pixels),
-        (PngPixels::Rgb(pixels), None) => png_encode(width, height, 2, 3, &pixels),
+    let encoded = match (converted, alpha) {
+        (PngPixels::Gray(pixels), None) => media_codec::encode_png_with_color(width, height, PngColor::Gray, &pixels),
+        (PngPixels::Rgb(pixels), None) => media_codec::encode_png_with_color(width, height, PngColor::Rgb, &pixels),
         (PngPixels::Gray(pixels), Some(alpha)) => {
             let mut gray_alpha = Vec::with_capacity(pixels.len() * 2);
             for (pixel, value) in pixels.iter().zip(alpha.iter()) {
                 gray_alpha.extend_from_slice(&[*pixel, *value]);
             }
-            png_encode(width, height, 4, 2, &gray_alpha)
+            media_codec::encode_png_with_color(width, height, PngColor::GrayAlpha, &gray_alpha)
         }
         (PngPixels::Rgb(pixels), Some(alpha)) => {
             let mut rgba = Vec::with_capacity(pixels.len() / 3 * 4);
@@ -415,7 +415,14 @@ fn handle_image(document: &ParsedDocument, name: &str, stream: &PdfStream, colle
                 rgba.extend_from_slice(pixel);
                 rgba.push(*value);
             }
-            png_encode(width, height, 6, 4, &rgba)
+            media_codec::encode_png_with_color(width, height, PngColor::Rgba, &rgba)
+        }
+    };
+    let png = match encoded {
+        Ok(png) => png,
+        Err(error) => {
+            collector.push_loss(index, name, stream, &filter, error.to_string());
+            return Ok(());
         }
     };
 
@@ -652,39 +659,6 @@ fn smask_alpha(document: &ParsedDocument, value: &PdfObject, width: u32, height:
         return Err("/SMask data is shorter than its dimensions require".to_string());
     }
     Ok(decoded[..expected].to_vec())
-}
-
-/// Encodes an 8-bit PNG: signature, `IHDR`, one filtered scanline per row in
-/// `IDAT` (zlib), then `IEND`. `channels` describes the raw pixel layout.
-fn png_encode(width: u32, height: u32, color_type: u8, channels: usize, pixels: &[u8]) -> Vec<u8> {
-    let mut output = Vec::new();
-    output.extend_from_slice(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
-
-    let mut header = Vec::with_capacity(13);
-    header.extend_from_slice(&width.to_be_bytes());
-    header.extend_from_slice(&height.to_be_bytes());
-    header.extend_from_slice(&[8, color_type, 0, 0, 0]);
-    write_png_chunk(&mut output, b"IHDR", &header);
-
-    let stride = usize::try_from(width).unwrap_or(0) * channels;
-    let mut raw = Vec::with_capacity((stride + 1) * usize::try_from(height).unwrap_or(0));
-    for row in pixels.chunks(stride.max(1)) {
-        raw.push(0);
-        raw.extend_from_slice(row);
-    }
-    write_png_chunk(&mut output, b"IDAT", &Zlib::encode(&raw, DeflateLevel::Default));
-    write_png_chunk(&mut output, b"IEND", &[]);
-    output
-}
-
-fn write_png_chunk(output: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    output.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    output.extend_from_slice(kind);
-    output.extend_from_slice(data);
-    let mut crc = Crc32::new();
-    crc.update(kind);
-    crc.update(data);
-    output.extend_from_slice(&crc.value().to_be_bytes());
 }
 
 impl<'a> ImageCollector<'a> {
