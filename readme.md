@@ -32,6 +32,8 @@ Acrobat, no system dependency.
   object streams.
 - Extract text from Flate, LZW, ASCIIHex, ASCII85 and RunLength streams and
   report every skipped part.
+- Inspect, extract text and extract images from raw PDF bytes or standard input,
+  so a document piped from another process needs no temporary file.
 - Extract embedded images: JPEG payloads are written unchanged and 8-bit
   DeviceGray/DeviceRGB streams become PNG (with `/SMask` alpha).
 
@@ -82,6 +84,11 @@ open-pdf extract-text notes.pdf
 
 # Extract embedded images as JPG/PNG into a directory
 open-pdf extract-images notes.pdf -o images/
+
+# Work on bytes instead of a path: pipe a PDF into any reader
+cat input.pdf | open-pdf inspect --stdin
+cat input.pdf | open-pdf extract-text --stdin
+cat input.pdf | open-pdf extract-images --stdin --name report -o images/
 ```
 
 The same operations are available through the session SDK. The session is the
@@ -125,6 +132,13 @@ console.log(text.markdown, text.losses);
 
 const images = await pdf.extractImages('hello.pdf', 'images');
 console.log(images);
+
+// Same readers over bytes the caller already owns
+const bytes = await readFile('hello.pdf');
+const piped = await pdf.inspectBytes(bytes);
+const pipedText = await pdf.extractTextBytes(bytes);
+const pipedImages = await pdf.extractImagesBytes(bytes, 'images', 'hello');
+console.log(piped.pages, pipedText.losses.length, pipedImages.length);
 ```
 
 `OpenPDF.capabilities(...)` and the other synchronous static methods stay as

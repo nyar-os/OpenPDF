@@ -13,7 +13,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createCli, type ParsedOptions } from '@wae/commander';
 
 import { OpenPDF } from './index.js';
-import type { Bookmark, CropBox, FormValue, PdfCapabilities, PdfInspectReport, SplitReport } from './types.js';
+import type {
+    Bookmark,
+    CropBox,
+    ExtractReport,
+    ExtractedImage,
+    FormValue,
+    PdfCapabilities,
+    PdfInspectReport,
+    SplitReport,
+} from './types.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +74,19 @@ const integers = (options: ParsedOptions, key: string): number[] | undefined | n
 };
 
 const input = (options: ParsedOptions): string | undefined => options._?.[0];
+
+/** Reads standard input as raw PDF bytes. `undefined` means the read failed. */
+async function stdinBytes(): Promise<Uint8Array | undefined> {
+    try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) {
+            chunks.push(chunk as Buffer);
+        }
+        return Buffer.concat(chunks);
+    } catch {
+        return undefined;
+    }
+}
 
 /** Parses a 1-based page range list such as `1-3,5`. `null` means malformed. */
 const pageRanges = (options: ParsedOptions, key: string): string | undefined | null => {
@@ -165,16 +187,31 @@ cli.command('capabilities', 'cli.cmd.capabilities').actionCtx(async (_options, _
     return 0;
 });
 
-cli.command('inspect', 'cli.cmd.inspect').actionCtx(async (options, _args, ctx) => {
-    const file = input(options);
-    if (file === undefined) {
-        ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
-        return 2;
-    }
-    const report = await pdf.inspect(file);
-    ctx.emitResult(report, describeInspect(report));
-    return 0;
-});
+cli
+    .command('inspect', 'cli.cmd.inspect')
+    .option('--stdin', 'cli.opt.stdin')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const useStdin = flag(options, 'stdin');
+        if ((file === undefined) === !useStdin) {
+            ctx.fail('open-pdf.cli.input-required', { message: 'pass one PDF path or `--stdin`, not both' });
+            return 2;
+        }
+        let report: PdfInspectReport;
+        if (useStdin) {
+            const bytes = await stdinBytes();
+            if (bytes === undefined || bytes.length === 0) {
+                ctx.fail('open-pdf.cli.stdin-empty', { message: 'no PDF bytes arrived on standard input' });
+                return 2;
+            }
+            report = await pdf.inspectBytes(bytes);
+        }
+        else {
+            report = await pdf.inspect(file as string);
+        }
+        ctx.emitResult(report, describeInspect(report));
+        return 0;
+    });
 
 cli
     .command('merge', 'cli.cmd.merge')
@@ -656,34 +693,63 @@ cli
         return 0;
     });
 
-cli.command('extract-text', 'cli.cmd.extract-text').actionCtx(async (options, _args, ctx) => {
-    const file = input(options);
-    if (file === undefined) {
-        ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
-        return 2;
-    }
-    const report = await pdf.extractText(file);
-    const losses = report.losses.map((loss) => `loss ${loss.code} page=${loss.page} ${loss.message}`);
-    const human = [report.markdown.length > 0 ? report.markdown : '(no text extracted)', ...losses].join('\n');
-    ctx.emitResult(report, human);
-    return 0;
-});
+cli
+    .command('extract-text', 'cli.cmd.extract-text')
+    .option('--stdin', 'cli.opt.stdin')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const useStdin = flag(options, 'stdin');
+        if ((file === undefined) === !useStdin) {
+            ctx.fail('open-pdf.cli.input-required', { message: 'pass one PDF path or `--stdin`, not both' });
+            return 2;
+        }
+        let report: ExtractReport;
+        if (useStdin) {
+            const bytes = await stdinBytes();
+            if (bytes === undefined || bytes.length === 0) {
+                ctx.fail('open-pdf.cli.stdin-empty', { message: 'no PDF bytes arrived on standard input' });
+                return 2;
+            }
+            report = await pdf.extractTextBytes(bytes);
+        }
+        else {
+            report = await pdf.extractText(file as string);
+        }
+        const losses = report.losses.map((loss) => `loss ${loss.code} page=${loss.page} ${loss.message}`);
+        const human = [report.markdown.length > 0 ? report.markdown : '(no text extracted)', ...losses].join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
 
 cli
     .command('extract-images', 'cli.cmd.extract-images')
     .option('-o, --out-dir <dir>', 'cli.opt.image-dir')
+    .option('--stdin', 'cli.opt.stdin')
+    .option('--name <stem>', 'cli.opt.image-stem')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const outDir = text(options, 'out-dir');
-        if (file === undefined) {
-            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+        const useStdin = flag(options, 'stdin');
+        if ((file === undefined) === !useStdin) {
+            ctx.fail('open-pdf.cli.input-required', { message: 'pass one PDF path or `--stdin`, not both' });
             return 2;
         }
         if (outDir === undefined) {
             ctx.fail('open-pdf.cli.image-dir-required', { message: '`--out-dir <dir>` is required' });
             return 2;
         }
-        const images = await pdf.extractImages(file, outDir);
+        let images: ExtractedImage[];
+        if (useStdin) {
+            const bytes = await stdinBytes();
+            if (bytes === undefined || bytes.length === 0) {
+                ctx.fail('open-pdf.cli.stdin-empty', { message: 'no PDF bytes arrived on standard input' });
+                return 2;
+            }
+            images = await pdf.extractImagesBytes(bytes, outDir, text(options, 'name') ?? 'stdin');
+        }
+        else {
+            images = await pdf.extractImages(file as string, outDir);
+        }
         const human = images.length === 0
             ? '(no images found)'
             : images

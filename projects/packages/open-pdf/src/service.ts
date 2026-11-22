@@ -217,3 +217,18 @@ export function extractText(path: string): ExtractReport {
 export function extractImages(path: string, outDir: string): ExtractedImage[] {
     return decode<ExtractedImage[]>(() => binding('extractImages').pdf_extract_images(path, outDir));
 }
+
+/** Reads version, pages, metadata, page sizes and outlines from PDF bytes. */
+export function inspectBytes(bytes: Uint8Array): PdfInspectReport {
+    return decode<PdfInspectReport>(() => binding('inspectBytes').pdf_inspect_bytes(bytes));
+}
+
+/** Extracts text from PDF bytes. */
+export function extractTextBytes(bytes: Uint8Array): ExtractReport {
+    return decode<ExtractReport>(() => binding('extractTextBytes').pdf_extract_text_bytes(bytes));
+}
+
+/** Extracts images from PDF bytes into `outDir`, naming files after `stem`. */
+export function extractImagesBytes(bytes: Uint8Array, outDir: string, stem: string): ExtractedImage[] {
+    return decode<ExtractedImage[]>(() => binding('extractImagesBytes').pdf_extract_images_bytes(bytes, outDir, stem));
+}

@@ -24,6 +24,8 @@
             "overwrite": "Replace the output file when it already exists",
             "out-dir": "Directory for split files",
             "image-dir": "Directory for extracted images",
+            "stdin": "Read the PDF from standard input instead of a file path",
+            "image-stem": "File stem for images extracted from standard input, default stdin",
             "ranges": "Comma-separated 1-based ranges, e.g. 1-5,10,15-20",
             "every": "Split into consecutive files of N pages each",
             "order": "Comma-separated 1-based page order",

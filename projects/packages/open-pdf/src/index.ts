@@ -153,6 +153,21 @@ export class OpenPDF {
         return service.extractImages(path, outDir);
     }
 
+    /** Reads version, pages, metadata, page sizes and outlines from PDF bytes. */
+    async inspectBytes(bytes: Uint8Array): Promise<PdfInspectReport> {
+        return service.inspectBytes(bytes);
+    }
+
+    /** Extracts text from PDF bytes. */
+    async extractTextBytes(bytes: Uint8Array): Promise<ExtractReport> {
+        return service.extractTextBytes(bytes);
+    }
+
+    /** Extracts images from PDF bytes into `outDir`, naming files after `stem`. */
+    async extractImagesBytes(bytes: Uint8Array, outDir: string, stem: string): Promise<ExtractedImage[]> {
+        return service.extractImagesBytes(bytes, outDir, stem);
+    }
+
     /** Reports the installed addon version. */
     static version(): string {
         return service.version();
@@ -248,5 +263,20 @@ export class OpenPDF {
     /** Extracts images from every page into `outDir`. */
     static extractImages(path: string, outDir: string): ExtractedImage[] {
         return service.extractImages(path, outDir);
+    }
+
+    /** Reads version, pages, metadata, page sizes and outlines from PDF bytes. */
+    static inspectBytes(bytes: Uint8Array): PdfInspectReport {
+        return service.inspectBytes(bytes);
+    }
+
+    /** Extracts text from PDF bytes. */
+    static extractTextBytes(bytes: Uint8Array): ExtractReport {
+        return service.extractTextBytes(bytes);
+    }
+
+    /** Extracts images from PDF bytes into `outDir`, naming files after `stem`. */
+    static extractImagesBytes(bytes: Uint8Array, outDir: string, stem: string): ExtractedImage[] {
+        return service.extractImagesBytes(bytes, outDir, stem);
     }
 }

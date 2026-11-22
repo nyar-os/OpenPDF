@@ -29,6 +29,21 @@ fn optional_text(ctx: &CallContext, index: usize) -> Result<Option<String>> {
     }
 }
 
+/// Reads a `Buffer` or `Uint8Array` argument as raw bytes.
+fn bytes(ctx: &CallContext, index: usize) -> Result<Vec<u8>> {
+    let value = argument(ctx, index)?;
+    let invalid = || Error::new("session/argument-invalid: expected a Buffer or Uint8Array of PDF bytes");
+    let length = value.get_named("length").map_err(|_| invalid())?.as_i64().map_err(|_| invalid())?;
+    let length = usize::try_from(length).map_err(|_| invalid())?;
+    let mut output = Vec::with_capacity(length);
+    for position in 0..length {
+        let position = u32::try_from(position).map_err(|_| invalid())?;
+        let byte = value.element(position)?.as_i64().map_err(|_| invalid())?;
+        output.push(u8::try_from(byte).map_err(|_| invalid())?);
+    }
+    Ok(output)
+}
+
 fn respond(ctx: &CallContext, value: &impl serde::Serialize) -> Result<JsValue> {
     let text = serde_json::to_string(value).map_err(|error| Error::new(format!("capability/not-implemented: {error}")))?;
     ctx.env().string(&text)
@@ -226,6 +241,32 @@ fn pdf_extract_images(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::extract_images(std::path::Path::new(&path), std::path::Path::new(&out_dir)).map_err(failure)?)
 }
 
+/// Inspects one PDF from bytes the caller already owns.
+#[function]
+fn pdf_inspect_bytes(ctx: CallContext) -> Result<JsValue> {
+    let document = bytes(&ctx, 0)?;
+    respond(&ctx, &open_pdf_core::inspect_bytes(&document).map_err(failure)?)
+}
+
+/// Extracts text from PDF bytes the caller already owns.
+#[function]
+fn pdf_extract_text_bytes(ctx: CallContext) -> Result<JsValue> {
+    let document = bytes(&ctx, 0)?;
+    respond(&ctx, &open_pdf_core::extract_text_bytes(&document).map_err(failure)?)
+}
+
+/// Extracts images from PDF bytes into a directory, naming files after `stem`.
+#[function]
+fn pdf_extract_images_bytes(ctx: CallContext) -> Result<JsValue> {
+    let document = bytes(&ctx, 0)?;
+    let out_dir = text(&ctx, 1)?;
+    let stem = text(&ctx, 2)?;
+    respond(
+        &ctx,
+        &open_pdf_core::extract_images_bytes(&document, std::path::Path::new(&out_dir), &stem).map_err(failure)?,
+    )
+}
+
 /// Paints a text stamp on the selected pages of one PDF file.
 #[function]
 fn pdf_stamp(ctx: CallContext) -> Result<JsValue> {
@@ -256,5 +297,8 @@ register_module![
     pdf_create,
     pdf_extract_text,
     pdf_extract_images,
+    pdf_inspect_bytes,
+    pdf_extract_text_bytes,
+    pdf_extract_images_bytes,
     pdf_stamp
 ];
