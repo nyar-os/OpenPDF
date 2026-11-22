@@ -7,7 +7,7 @@ use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
-    merge, rotate_pages, search, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
+    merge, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
 use serde_json::json;
 
@@ -176,6 +176,34 @@ fn search_reports_line_scoped_matches_and_honours_the_limit() {
 
     let empty = search(&path, "   ", None).expect_err("empty query");
     assert_eq!(empty.code(), "session/argument-invalid");
+}
+
+#[test]
+fn search_pages_only_scans_the_selected_pages() {
+    let workspace = Workspace::new();
+    let path = workspace.create("search-pages.pdf", None, &["Alpha invoice one", "Beta invoice two", "Gamma invoice three"]);
+
+    let report = search_pages(&path, "invoice", None, "3,1").expect("search selected pages");
+    assert_eq!(report["sourcePages"], json!(3));
+    assert_eq!(report["selected"], json!([3, 1]));
+    assert_eq!(report["pages"], json!(2));
+    let hits = report["hits"].as_array().expect("hits");
+    assert_eq!(hits.len(), 2);
+    assert!(hits.iter().any(|hit| hit["text"].as_str().unwrap_or_default().contains("Alpha")));
+    assert!(hits.iter().any(|hit| hit["text"].as_str().unwrap_or_default().contains("Gamma")));
+    assert!(!hits.iter().any(|hit| hit["text"].as_str().unwrap_or_default().contains("Beta")));
+
+    let whole = search_pages(&path, "invoice", Some(1), "1-3").expect("search every page");
+    assert_eq!(whole["sourcePages"], json!(3));
+    assert_eq!(whole["selected"], json!([1, 2, 3]));
+    assert_eq!(whole["hits"].as_array().expect("hits").len(), 1);
+    assert_eq!(whole["truncated"], json!(true));
+
+    let empty = search_pages(&path, " ", None, "1").expect_err("empty query");
+    assert_eq!(empty.code(), "session/argument-invalid");
+
+    let error = search_pages(&path, "invoice", None, "4").expect_err("page is outside the document");
+    assert_eq!(error.code(), "session/argument-invalid");
 }
 
 #[test]

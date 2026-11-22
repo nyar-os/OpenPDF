@@ -29,6 +29,7 @@ export interface NativeBinding {
     pdf_extract_text(path: string): string;
     pdf_extract_text_pages(path: string, ranges: string): string;
     pdf_search(path: string, query: string, limit?: number): string;
+    pdf_search_pages(path: string, query: string, ranges: string, limit?: number): string;
     pdf_extract_images(path: string, outDir: string): string;
     pdf_extract_images_pages(path: string, outDir: string, ranges: string): string;
     pdf_inspect_bytes(bytes: Uint8Array): string;

@@ -382,6 +382,10 @@ export interface PdfSearchReport {
     /** Effective limit after clamping to 1-500. */
     readonly limit: number;
     readonly pages: number;
+    /** Pages in the source document; present when a page selection was used. */
+    readonly sourcePages?: number;
+    /** One-based source pages that were searched, in extraction order. */
+    readonly selected?: readonly number[];
     readonly lines: number;
     /** Whether more matches exist beyond `limit`. */
     readonly truncated: boolean;

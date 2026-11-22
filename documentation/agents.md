@@ -38,7 +38,7 @@ open-pdf fill-form <file> -o <out> --set Name=Value [--set Name=Value...]
 open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--page-size <size>] [--font <name>] [--font-size <pt>] [--margin <pt>] [--align <align>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--page-numbers] [--overwrite]
 open-pdf stamp <file> -o <out> --text <text> [--position <position>] [--font <name>] [--font-size <pt>] [--rotation <degrees>] [--opacity <value>] [--color <hex>] [--pages <list>]
 open-pdf extract-text <file> [--pages <list>] | --stdin
-open-pdf search <file> <query> [--limit <n>]
+open-pdf search <file> <query> [--limit <n>] [--pages <list>]
 open-pdf extract-images <file> [--pages <list>] | --stdin -o <out-dir> [--name <stem>]
 ```
 
@@ -116,7 +116,7 @@ Report shapes:
 | `create` | `{ path, pages, bytes }` |
 | `stamp` | `{ path, pages, pagesStamped, bytes }` |
 | `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
-| `search` | `{ path, query, limit, pages, lines, truncated, hits, losses }` |
+| `search` | `{ path, query, limit, pages, sourcePages?, selected?, lines, truncated, hits, losses }` |
 | `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` (`page` is the source page when `--pages` is used) |
 
 Nested values:
@@ -133,6 +133,9 @@ Nested values:
   `column` are one-based, `start` and `end` are byte offsets within `text`, and
   matching is case-sensitive on the extracted Markdown. `truncated` is `true`
   when more matches exist beyond `limit` (default 100, clamped to 1-500).
+  `--pages` projects the selection the same way as `extract-text --pages`, so
+  `hits` report lines within that projection while `sourcePages` and `selected`
+  name the source pages.
 
 ## Exit codes
 

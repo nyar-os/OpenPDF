@@ -298,8 +298,11 @@ export function extractText(path: string, pages?: string): ExtractReport {
 }
 
 /** Searches extracted text and reports line-scoped matches. */
-export function search(path: string, query: string, limit?: number): PdfSearchReport {
-    return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit));
+export function search(path: string, query: string, limit?: number, pages?: string): PdfSearchReport {
+    if (pages === undefined) {
+        return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit));
+    }
+    return decode<PdfSearchReport>(() => binding('searchPages').pdf_search_pages(path, query, pages, limit));
 }
 
 /** Extracts images from every page into `outDir`, or only from `pages`. */

@@ -727,6 +727,7 @@ cli
 cli
     .command('search', 'cli.cmd.search')
     .option('--limit <n>', 'cli.opt.limit')
+    .option('--pages <ranges>', 'cli.opt.pages')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const query = options._?.[1];
@@ -744,11 +745,12 @@ cli
             }
             limit = parsed;
         }
-        const report = await pdf.search(file, query, { limit });
+        const report = await pdf.search(file, query, { limit, pages: text(options, 'pages') });
+        const scope = report.selected === undefined ? '' : ` pages=${report.selected.join(',')}`;
         const lines = report.hits.map((hit) => `${hit.line}:${hit.column} ${hit.match}`);
         ctx.emitResult(
             report,
-            [`${report.hits.length} hit(s) for ${JSON.stringify(report.query)}`, ...lines].join('\n'),
+            [`${report.hits.length} hit(s) for ${JSON.stringify(report.query)}${scope}`, ...lines].join('\n'),
         );
         return 0;
     });

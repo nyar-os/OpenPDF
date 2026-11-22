@@ -258,6 +258,27 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::search(std::path::Path::new(&path), &query, limit).map_err(failure)?)
 }
 
+/// Searches the extracted text of the selected one-based pages.
+#[function]
+fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let query = text(&ctx, 1)?;
+    let ranges = text(&ctx, 2)?;
+    let limit = match ctx.args().get(3) {
+        Some(value) if !value.is_undefined()? => {
+            let value = value.as_i64()?;
+            let value = u32::try_from(value)
+                .map_err(|_| Error::new("session/argument-invalid: limit must be a positive integer"))?;
+            Some(value)
+        }
+        _ => None,
+    };
+    respond(
+        &ctx,
+        &open_pdf_core::search_pages(std::path::Path::new(&path), &query, limit, &ranges).map_err(failure)?,
+    )
+}
+
 /// Extracts images from one PDF file into a directory.
 #[function]
 fn pdf_extract_images(ctx: CallContext) -> Result<JsValue> {
@@ -336,6 +357,7 @@ register_module![
     pdf_extract_text,
     pdf_extract_text_pages,
     pdf_search,
+    pdf_search_pages,
     pdf_extract_images,
     pdf_extract_images_pages,
     pdf_inspect_bytes,

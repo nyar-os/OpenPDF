@@ -34,6 +34,24 @@ static TEMPORARY: AtomicU64 = AtomicU64::new(0);
 /// decoder. The report carries the extracted Markdown, its losses, the source
 /// page count and the pages that were actually extracted.
 pub fn extract_text_pages(path: &Path, ranges: &str) -> Result<Value, ServiceError> {
+    let (source_pages, selected, extracted) = extract_selected(path, ranges)?;
+    Ok(json!({
+        "pages": extracted.pages,
+        "sourcePages": source_pages,
+        "selected": selected,
+        "markdown": extracted.markdown,
+        "losses": extracted.losses,
+    }))
+}
+
+/// Extracts text from `ranges`, projecting the selection when it is partial.
+///
+/// Returns the source page count, the one-based pages that were extracted in
+/// order, and the extraction report produced from the projection.
+fn extract_selected(
+    path: &Path,
+    ranges: &str,
+) -> Result<(usize, Vec<usize>, ExtractReport), ServiceError> {
     let report = inspect(path)?;
     let selected = parse_page_ranges(ranges, report.pages)?;
     let extracted = if selected.iter().copied().eq(1..=report.pages) {
@@ -47,13 +65,7 @@ pub fn extract_text_pages(path: &Path, ranges: &str) -> Result<Value, ServiceErr
         let _ = fs::remove_file(&temporary);
         outcome?
     };
-    Ok(json!({
-        "pages": extracted.pages,
-        "sourcePages": report.pages,
-        "selected": selected,
-        "markdown": extracted.markdown,
-        "losses": extracted.losses,
-    }))
+    Ok((report.pages, selected, extracted))
 }
 
 /// Searches extracted text and reports every case-sensitive line match.
@@ -64,11 +76,37 @@ pub fn extract_text_pages(path: &Path, ranges: &str) -> Result<Value, ServiceErr
 /// carries the one-based line, a one-based column, byte offsets within the line
 /// and the matching fragment.
 pub fn search(path: &Path, query: &str, limit: Option<u32>) -> Result<Value, ServiceError> {
+    let report = extract_text(path)?;
+    search_report(path, query, limit, &report, None)
+}
+
+/// Searches only the selected one-based pages, in the requested order.
+///
+/// `ranges` accepts comma-separated pages and inclusive ranges such as
+/// `1-3,5`. The selection is projected the same way as
+/// [`extract_text_pages`], so hits report lines and columns within that
+/// projection while `sourcePages` and `selected` name the source pages.
+pub fn search_pages(
+    path: &Path,
+    query: &str,
+    limit: Option<u32>,
+    ranges: &str,
+) -> Result<Value, ServiceError> {
+    let (source_pages, selected, report) = extract_selected(path, ranges)?;
+    search_report(path, query, limit, &report, Some((source_pages, &selected)))
+}
+
+fn search_report(
+    path: &Path,
+    query: &str,
+    limit: Option<u32>,
+    report: &ExtractReport,
+    selection: Option<(usize, &[usize])>,
+) -> Result<Value, ServiceError> {
     if query.trim().is_empty() {
         return Err(invalid_pages("`query` must be a non-empty string"));
     }
     let limit = limit.map_or(100usize, |value| value.clamp(1, 500) as usize);
-    let report = extract_text(path)?;
     let mut hits = Vec::new();
     let mut truncated = false;
     'lines: for (index, line) in report.markdown.lines().enumerate() {
@@ -91,7 +129,7 @@ pub fn search(path: &Path, query: &str, limit: Option<u32>) -> Result<Value, Ser
             from = end;
         }
     }
-    Ok(json!({
+    let mut outcome = json!({
         "path": path.display().to_string(),
         "query": query,
         "limit": limit,
@@ -100,7 +138,12 @@ pub fn search(path: &Path, query: &str, limit: Option<u32>) -> Result<Value, Ser
         "truncated": truncated,
         "hits": hits,
         "losses": report.losses,
-    }))
+    });
+    if let Some((source_pages, selected)) = selection {
+        outcome["sourcePages"] = json!(source_pages);
+        outcome["selected"] = json!(selected);
+    }
+    Ok(outcome)
 }
 
 /// Extracts images from the selected one-based pages into `out_dir`.
