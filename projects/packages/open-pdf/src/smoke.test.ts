@@ -14,6 +14,7 @@ import test from 'node:test';
 
 import { OpenPDF, OpenPdfError, documentFormats, errorCodes, formatFromPath, formatInfo, isPdfPath } from './index.js';
 import { nativeBinding } from './native.js';
+import { expandPageList, formatPageList } from './service.js';
 
 const installed = (() => {
     try {
@@ -35,6 +36,20 @@ test('format registry classifies PDF', () => {
     assert.equal(formatFromPath('no-extension'), undefined);
     assert.equal(isPdfPath('deck.pdf'), true);
     assert.equal(isPdfPath('deck.docx'), false);
+});
+
+test('page lists expand to ascending unique pages', () => {
+    assert.deepEqual(expandPageList('1-3,5', 5), [1, 2, 3, 5]);
+    assert.deepEqual(expandPageList('5,1,5', 5), [1, 5]);
+    assert.equal(formatPageList([2, 3, 4, 6]), '2-4,6');
+});
+
+test('page lists reject empty, reversed and out-of-range bounds', () => {
+    assert.throws(() => expandPageList('', 5), /must list/);
+    assert.throws(() => expandPageList('0', 5), /not a 1-based page range/);
+    assert.throws(() => expandPageList('3-1', 5), /not a 1-based page range/);
+    assert.throws(() => expandPageList('6', 5), /past the document/);
+    assert.throws(() => expandPageList('1-x', 5), /not a page number or range/);
 });
 
 test('without an installed addon every engine call reports capability/not-implemented', { skip: withAddon }, () => {

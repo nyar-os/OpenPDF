@@ -21,6 +21,7 @@ Acrobat, no system dependency.
 - Split by 1-based ranges such as `1-5,10,15-20`, or into fixed-size chunks.
 - Reorder, remove and rotate pages without re-rendering them.
 - Delete pages by a 1-based range list such as `2,5-7`, keeping the rest in order.
+- Keep only the selected pages, by a 1-based range list, in source order.
 - Rotate only the selected pages clockwise by 90, 180 or 270 degrees.
 - Write a custom `/CropBox` on the selected pages without touching `/MediaBox`.
 - Rewrite the document information dictionary.
@@ -65,6 +66,9 @@ open-pdf arrange input.pdf -o arranged.pdf --order 3,1,2 --remove 4 --rotate 90
 # Delete pages and keep the rest in order
 open-pdf delete-pages input.pdf --pages 2,5-7 -o kept.pdf
 
+# Keep only pages 1-3 and 5, in source order
+open-pdf extract-pages input.pdf --pages 1-3,5 -o excerpt.pdf
+
 # Rotate only pages 1-3 clockwise by 90 degrees
 open-pdf rotate input.pdf --pages 1-3 --degrees 90 -o rotated.pdf
 
@@ -105,6 +109,7 @@ console.log(info.version, info.pages, info.metadata.title);
 await pdf.merge(['a.pdf', 'b.pdf'], 'combined.pdf', { title: 'Combined' });
 await pdf.split('combined.pdf', '1-2,3', 'pages');
 await pdf.splitEvery('combined.pdf', 2, 'chunks');
+await pdf.keepPages('combined.pdf', '1-3,5', 'excerpt.pdf');
 await pdf.create({ out: 'hello.pdf', title: 'Hello', pages: ['line one\nline two'] });
 await pdf.create({
   out: 'styled.pdf',

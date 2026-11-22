@@ -6,6 +6,8 @@
  * line.
  */
 
+import { copyFileSync, existsSync, statSync } from 'node:fs';
+
 import { NotImplementedError, OpenPdfError, errorCodes, type OpenPdfErrorCode } from './errors.js';
 import { nativeBinding } from './native.js';
 import type {
@@ -21,6 +23,7 @@ import type {
     ExtractReport,
     FormFillReport,
     FormValue,
+    KeepPagesReport,
     MergeOptions,
     MergeReport,
     MetadataPatch,
@@ -119,6 +122,83 @@ export function deletePages(path: string, pages: string, out: string, overwrite 
     return decode<DeletePagesReport>(() =>
         binding('deletePages').pdf_delete_pages(path, pages, out, overwrite),
     );
+}
+
+/**
+ * Expands a 1-based page list such as `1-3,5` into ascending page numbers.
+ *
+ * Duplicates collapse and the result always follows document order, so a list
+ * `5,1` keeps page 1 before page 5. Out-of-range bounds answer with
+ * `session/argument-invalid` instead of producing a truncated document.
+ */
+export function expandPageList(spec: string, total: number): number[] {
+    const parts = spec.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
+    if (parts.length === 0) {
+        throw new OpenPdfError('session/argument-invalid', '`pages` must list 1-based pages such as `1-3,5`', {
+            details: { feature: 'keepPages' },
+        });
+    }
+    const selected = new Set<number>();
+    for (const part of parts) {
+        const bounds = part.split('-');
+        if (bounds.length > 2 || !bounds.every((bound) => /^\d+$/.test(bound))) {
+            throw new OpenPdfError('session/argument-invalid', `\`${part}\` is not a page number or range`, {
+                details: { feature: 'keepPages' },
+            });
+        }
+        const start = Number(bounds[0]);
+        const end = bounds.length === 1 ? start : Number(bounds[1]);
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) {
+            throw new OpenPdfError('session/argument-invalid', `\`${part}\` is not a 1-based page range`, {
+                details: { feature: 'keepPages' },
+            });
+        }
+        if (end > total) {
+            throw new OpenPdfError(
+                'session/argument-invalid',
+                `\`${part}\` reaches past the document's ${total} pages`,
+                { details: { feature: 'keepPages' } },
+            );
+        }
+        for (let page = start; page <= end; page += 1) {
+            selected.add(page);
+        }
+    }
+    return [...selected].sort((left, right) => left - right);
+}
+
+/** Writes ascending page numbers as compact 1-based ranges such as `1-3,5`. */
+export function formatPageList(pages: readonly number[]): string {
+    const parts: string[] = [];
+    let index = 0;
+    while (index < pages.length) {
+        let end = index;
+        while (end + 1 < pages.length && pages[end + 1] === pages[end] + 1) {
+            end += 1;
+        }
+        parts.push(index === end ? `${pages[index]}` : `${pages[index]}-${pages[end]}`);
+        index = end + 1;
+    }
+    return parts.join(',');
+}
+
+/** Keeps only the selected pages, in source order, into a new PDF. */
+export function keepPages(path: string, pages: string, out: string, overwrite = false): KeepPagesReport {
+    const total = inspect(path).pages;
+    const kept = expandPageList(pages, total);
+    const selected = new Set(kept);
+    const removed = Array.from({ length: total }, (_, index) => index + 1).filter((page) => !selected.has(page));
+    if (removed.length === 0) {
+        if (!overwrite && existsSync(out)) {
+            throw new OpenPdfError('io/exists', `${out} already exists; pass overwrite to replace it`, {
+                details: { feature: 'keepPages', path: out },
+            });
+        }
+        copyFileSync(path, out);
+        return { path: out, pages: total, kept: total, removed: 0, bytes: statSync(out).size };
+    }
+    const report = deletePages(path, formatPageList(removed), out, overwrite);
+    return { path: report.path, pages: report.pages, kept: report.pages, removed: report.removed, bytes: report.bytes };
 }
 
 /** Adds a clockwise rotation to the selected pages into a new PDF. */

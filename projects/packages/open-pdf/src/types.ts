@@ -180,6 +180,18 @@ export interface DeletePagesReport {
     readonly bytes: number;
 }
 
+/** Result of `keepPages()`. */
+export interface KeepPagesReport {
+    readonly path: string;
+    /** Pages written to the output, in source order. */
+    readonly pages: number;
+    /** Pages kept from the source document. */
+    readonly kept: number;
+    /** Pages dropped from the source document. */
+    readonly removed: number;
+    readonly bytes: number;
+}
+
 /** Result of `rotatePages()`. */
 export interface RotatePagesReport {
     readonly path: string;

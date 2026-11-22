@@ -23,6 +23,7 @@ import type {
     ExtractReport,
     FormFillReport,
     FormValue,
+    KeepPagesReport,
     MergeOptions,
     MergeReport,
     MetadataPatch,
@@ -94,6 +95,11 @@ export class OpenPDF {
     /** Removes the selected pages into a new PDF. */
     async deletePages(path: string, pages: string, out: string, overwrite = this.defaultOverwrite): Promise<DeletePagesReport> {
         return service.deletePages(path, pages, out, overwrite);
+    }
+
+    /** Keeps only the selected pages, in source order, into a new PDF. */
+    async keepPages(path: string, pages: string, out: string, overwrite = this.defaultOverwrite): Promise<KeepPagesReport> {
+        return service.keepPages(path, pages, out, overwrite);
     }
 
     /** Adds a clockwise rotation to the selected pages into a new PDF. */
@@ -206,6 +212,11 @@ export class OpenPDF {
     /** Removes the selected pages into a new PDF. */
     static deletePages(path: string, pages: string, out: string, overwrite = false): DeletePagesReport {
         return service.deletePages(path, pages, out, overwrite);
+    }
+
+    /** Keeps only the selected pages, in source order, into a new PDF. */
+    static keepPages(path: string, pages: string, out: string, overwrite = false): KeepPagesReport {
+        return service.keepPages(path, pages, out, overwrite);
     }
 
     /** Adds a clockwise rotation to the selected pages into a new PDF. */

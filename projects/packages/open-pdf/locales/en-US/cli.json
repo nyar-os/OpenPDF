@@ -8,6 +8,7 @@
             "split": "Write one file per page range or per N pages",
             "arrange": "Reorder, remove and rotate pages into a new PDF",
             "delete-pages": "Remove the selected pages into a new PDF",
+            "extract-pages": "Keep only the selected pages, in source order, in a new PDF",
             "rotate": "Add a clockwise rotation to the selected pages",
             "set-page-boxes": "Write a CropBox on the selected pages",
             "set-metadata": "Copy every page and rewrite the information dictionary",
