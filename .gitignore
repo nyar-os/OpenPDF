@@ -19,3 +19,6 @@ dist/
 *.tsbuildinfo
 *.node
 pnpm-debug.log*
+
+# npm secrets (nifty)
+.secrets/
