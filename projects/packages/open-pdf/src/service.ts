@@ -302,9 +302,12 @@ export function search(path: string, query: string, limit?: number): PdfSearchRe
     return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit));
 }
 
-/** Extracts images from every page into `outDir`. */
-export function extractImages(path: string, outDir: string): ExtractedImage[] {
-    return decode<ExtractedImage[]>(() => binding('extractImages').pdf_extract_images(path, outDir));
+/** Extracts images from every page into `outDir`, or only from `pages`. */
+export function extractImages(path: string, outDir: string, pages?: string): ExtractedImage[] {
+    if (pages === undefined) {
+        return decode<ExtractedImage[]>(() => binding('extractImages').pdf_extract_images(path, outDir));
+    }
+    return decode<ExtractedImage[]>(() => binding('extractImagesPages').pdf_extract_images_pages(path, outDir, pages));
 }
 
 /** Reads version, pages, metadata, page sizes and outlines from PDF bytes. */

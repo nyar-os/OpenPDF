@@ -171,9 +171,15 @@ export class OpenPDF {
         return service.search(path, query, options.limit);
     }
 
-    /** Extracts images from every page into `outDir`. */
-    async extractImages(path: string, outDir: string): Promise<ExtractedImage[]> {
-        return service.extractImages(path, outDir);
+    /**
+     * Extracts images into `outDir`.
+     *
+     * `options.pages` is a one-based selection such as `1-3,5`; selected pages
+     * are extracted in the requested order and every image reports its source
+     * page.
+     */
+    async extractImages(path: string, outDir: string, options: { readonly pages?: string } = {}): Promise<ExtractedImage[]> {
+        return service.extractImages(path, outDir, options.pages);
     }
 
     /** Reads version, pages, metadata, page sizes and outlines from PDF bytes. */
@@ -298,9 +304,9 @@ export class OpenPDF {
         return service.search(path, query, options.limit);
     }
 
-    /** Extracts images from every page into `outDir`. */
-    static extractImages(path: string, outDir: string): ExtractedImage[] {
-        return service.extractImages(path, outDir);
+    /** Extracts images into `outDir`, optionally from the selected `pages`. */
+    static extractImages(path: string, outDir: string, options: { readonly pages?: string } = {}): ExtractedImage[] {
+        return service.extractImages(path, outDir, options.pages);
     }
 
     /** Reads version, pages, metadata, page sizes and outlines from PDF bytes. */

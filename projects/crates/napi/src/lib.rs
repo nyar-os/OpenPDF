@@ -266,6 +266,19 @@ fn pdf_extract_images(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::extract_images(std::path::Path::new(&path), std::path::Path::new(&out_dir)).map_err(failure)?)
 }
 
+/// Extracts images from selected one-based pages into a directory.
+#[function]
+fn pdf_extract_images_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out_dir = text(&ctx, 1)?;
+    let ranges = text(&ctx, 2)?;
+    respond(
+        &ctx,
+        &open_pdf_core::extract_images_pages(std::path::Path::new(&path), std::path::Path::new(&out_dir), &ranges)
+            .map_err(failure)?,
+    )
+}
+
 /// Inspects one PDF from bytes the caller already owns.
 #[function]
 fn pdf_inspect_bytes(ctx: CallContext) -> Result<JsValue> {
@@ -324,6 +337,7 @@ register_module![
     pdf_extract_text_pages,
     pdf_search,
     pdf_extract_images,
+    pdf_extract_images_pages,
     pdf_inspect_bytes,
     pdf_extract_text_bytes,
     pdf_extract_images_bytes,

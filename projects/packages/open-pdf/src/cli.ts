@@ -792,12 +792,18 @@ cli
     .option('-o, --out-dir <dir>', 'cli.opt.image-dir')
     .option('--stdin', 'cli.opt.stdin')
     .option('--name <stem>', 'cli.opt.image-stem')
+    .option('--pages <ranges>', 'cli.opt.pages')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const outDir = text(options, 'out-dir');
         const useStdin = flag(options, 'stdin');
+        const pages = text(options, 'pages');
         if ((file === undefined) === !useStdin) {
             ctx.fail('open-pdf.cli.input-required', { message: 'pass one PDF path or `--stdin`, not both' });
+            return 2;
+        }
+        if (useStdin && pages !== undefined) {
+            ctx.fail('open-pdf.cli.pages-need-file', { message: '`--pages` needs a PDF path; standard input cannot be paginated' });
             return 2;
         }
         if (outDir === undefined) {
@@ -814,7 +820,7 @@ cli
             images = await pdf.extractImagesBytes(bytes, outDir, text(options, 'name') ?? 'stdin');
         }
         else {
-            images = await pdf.extractImages(file as string, outDir);
+            images = await pdf.extractImages(file as string, outDir, pages === undefined ? {} : { pages });
         }
         const human = images.length === 0
             ? '(no images found)'

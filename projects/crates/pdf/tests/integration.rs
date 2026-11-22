@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
-    extract_images, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes, merge, rotate_pages,
-    search, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
+    extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
+    merge, rotate_pages, search, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
 use serde_json::json;
 
@@ -660,6 +660,30 @@ fn image_pdf() -> Vec<u8> {
     ])
 }
 
+fn image_pages_pdf() -> Vec<u8> {
+    fn gray(width: u32, height: u32, value: u8) -> Vec<u8> {
+        let data = Zlib::encode(&vec![value; (width * height) as usize], DeflateLevel::Default);
+        let mut stream = format!(
+            "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /BitsPerComponent 8 \
+             /ColorSpace /DeviceGray /Filter /FlateDecode /Length {} >>\nstream\n",
+            data.len()
+        )
+        .into_bytes();
+        stream.extend_from_slice(&data);
+        stream.extend_from_slice(b"\nendstream");
+        stream
+    }
+
+    assemble_bytes(&[
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] /Resources << /XObject << /Im 5 0 R >> >> >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] /Resources << /XObject << /Im 6 0 R >> >> >>".to_vec(),
+        gray(1, 1, 10),
+        gray(2, 1, 200),
+    ])
+}
+
 fn png_dimensions(bytes: &[u8]) -> (u32, u32, u8, u8) {
     assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A], "PNG signature");
     assert_eq!(&bytes[12..16], b"IHDR");
@@ -705,6 +729,31 @@ fn extract_images_writes_pngs_with_smask_and_keeps_jpegs() {
     assert!(bad.path.is_empty());
     let loss = bad.loss.as_deref().expect("invalid DCT must report a loss");
     assert!(loss.contains("SOI"), "{loss}");
+}
+
+#[test]
+fn extract_images_pages_keeps_only_selected_pages_and_remaps_their_numbers() {
+    let workspace = Workspace::new();
+    let path = workspace.write("pages.pdf", &image_pages_pdf());
+    let out_dir = workspace.path("selected-images");
+
+    let selected = extract_images_pages(&path, &out_dir, "2").expect("extract selected images");
+    let images = selected.as_array().expect("image array");
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0]["page"], json!(2));
+    let written = images[0]["path"].as_str().expect("written path");
+    assert!(written.ends_with("pages-p2-img1.png"), "{written}");
+    let (width, height, _, _) = png_dimensions(&fs::read(written).expect("read selected PNG"));
+    assert_eq!((width, height), (2, 1));
+
+    let whole = extract_images_pages(&path, &workspace.path("all-images"), "1-2").expect("extract every image");
+    let images = whole.as_array().expect("image array");
+    assert_eq!(images.len(), 2);
+    assert_eq!(images[0]["page"], json!(1));
+    assert_eq!(images[1]["page"], json!(2));
+
+    let error = extract_images_pages(&path, &workspace.path("bad-images"), "3").expect_err("page outside the document");
+    assert_eq!(error.code(), "session/argument-invalid");
 }
 
 #[test]

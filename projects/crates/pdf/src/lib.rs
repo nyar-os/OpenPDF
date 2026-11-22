@@ -103,6 +103,60 @@ pub fn search(path: &Path, query: &str, limit: Option<u32>) -> Result<Value, Ser
     }))
 }
 
+/// Extracts images from the selected one-based pages into `out_dir`.
+///
+/// `ranges` accepts comma-separated pages and inclusive ranges such as
+/// `1-3,5`. A selection that is not the whole document in order is projected
+/// into a temporary classic PDF first, so images keep the same decoder path.
+/// Every reported page is remapped to its source page and written files are
+/// renamed to carry that page number.
+pub fn extract_images_pages(path: &Path, out_dir: &Path, ranges: &str) -> Result<Value, ServiceError> {
+    let report = inspect(path)?;
+    let selected = parse_page_ranges(ranges, report.pages)?;
+    let mut images = if selected.iter().copied().eq(1..=report.pages) {
+        extract_images(path, out_dir)?
+    }
+    else {
+        let remove = (1..=report.pages).filter(|page| !selected.contains(page)).collect::<Vec<_>>();
+        let temporary = temporary_path();
+        let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("pdf");
+        let request = DocumentArrange { order: Some(selected.clone()), rotate: None, remove: Some(remove) };
+        let outcome = (|| {
+            arrange(path, &temporary, &request)?;
+            let bytes = fs::read(&temporary).map_err(|error| {
+                ServiceError::new("io/read", format!("failed to read {}: {error}", temporary.display()))
+            })?;
+            extract_images_bytes(&bytes, out_dir, stem)
+        })();
+        let _ = fs::remove_file(&temporary);
+        outcome?
+    };
+    for image in &mut images {
+        let Some(source) = image.page.checked_sub(1).and_then(|index| selected.get(index)).copied() else {
+            continue;
+        };
+        if source == image.page {
+            continue;
+        }
+        if !image.path.is_empty()
+            && let Some(name) = Path::new(&image.path).file_name().and_then(|name| name.to_str())
+        {
+            let from = format!("-p{}-img{}", image.page, image.index);
+            let to = format!("-p{source}-img{}", image.index);
+            let renamed = Path::new(&image.path).with_file_name(name.replacen(&from, &to, 1));
+            if fs::rename(&image.path, &renamed).is_ok() {
+                image.path = renamed.display().to_string();
+            }
+            else {
+                continue;
+            }
+        }
+        image.page = source;
+    }
+    serde_json::to_value(&images)
+        .map_err(|error| ServiceError::new("format/invalid", format!("the image report cannot be serialized: {error}")))
+}
+
 /// Expands one-based ranges such as `1-3,5`, refusing pages the PDF cannot satisfy.
 fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, ServiceError> {
     let mut selected = Vec::new();
@@ -203,7 +257,8 @@ pub fn capabilities() -> serde_json::Value {
             "extractText": "partial",
             "extractTextPages": "supported",
             "search": "partial",
-            "extractImages": "supported"
+            "extractImages": "supported",
+            "extractImagesPages": "supported"
         },
         "checks": {
             "metadata": "supported",

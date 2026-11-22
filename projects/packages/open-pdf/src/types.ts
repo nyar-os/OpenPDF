@@ -111,7 +111,10 @@ export interface PdfCapabilities {
         readonly fillForm: SupportLevel;
         readonly stamp: SupportLevel;
         readonly extractText: SupportLevel;
+        readonly extractTextPages: SupportLevel;
+        readonly search: SupportLevel;
         readonly extractImages: SupportLevel;
+        readonly extractImagesPages: SupportLevel;
     };
     readonly checks: {
         readonly metadata: SupportLevel;

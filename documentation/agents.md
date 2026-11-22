@@ -39,7 +39,7 @@ open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--pa
 open-pdf stamp <file> -o <out> --text <text> [--position <position>] [--font <name>] [--font-size <pt>] [--rotation <degrees>] [--opacity <value>] [--color <hex>] [--pages <list>]
 open-pdf extract-text <file> [--pages <list>] | --stdin
 open-pdf search <file> <query> [--limit <n>]
-open-pdf extract-images <file> | --stdin -o <out-dir> [--name <stem>]
+open-pdf extract-images <file> [--pages <list>] | --stdin -o <out-dir> [--name <stem>]
 ```
 
 `-o` is `--out` everywhere except `split` and `extract-images`, where it is
@@ -83,6 +83,8 @@ open-pdf extract-images <file> | --stdin -o <out-dir> [--name <stem>]
   empty string removes the field.
 - `--name` on `extract-images --stdin` sets the output file stem and defaults to
   `stdin`; it is ignored for path input.
+- `--pages` on `extract-images` keeps only the selected pages; images are named
+  after their source page and `--pages` is rejected with `--stdin`.
 
 ## Reports
 
@@ -115,7 +117,7 @@ Report shapes:
 | `stamp` | `{ path, pages, pagesStamped, bytes }` |
 | `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
 | `search` | `{ path, query, limit, pages, lines, truncated, hits, losses }` |
-| `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` |
+| `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` (`page` is the source page when `--pages` is used) |
 
 Nested values:
 
