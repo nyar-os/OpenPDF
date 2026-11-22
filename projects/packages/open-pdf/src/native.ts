@@ -27,6 +27,7 @@ export interface NativeBinding {
     pdf_fill_form(path: string, out: string, requestJson: string): string;
     pdf_create(requestJson: string): string;
     pdf_extract_text(path: string): string;
+    pdf_extract_text_pages(path: string, ranges: string): string;
     pdf_extract_images(path: string, outDir: string): string;
     pdf_inspect_bytes(bytes: Uint8Array): string;
     pdf_extract_text_bytes(bytes: Uint8Array): string;

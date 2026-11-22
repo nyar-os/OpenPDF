@@ -289,8 +289,11 @@ export function stamp(path: string, out: string, request: StampRequest): StampRe
 }
 
 /** Extracts text from content streams decoded through their filters. */
-export function extractText(path: string): ExtractReport {
-    return decode<ExtractReport>(() => binding('extractText').pdf_extract_text(path));
+export function extractText(path: string, pages?: string): ExtractReport {
+    if (pages === undefined) {
+        return decode<ExtractReport>(() => binding('extractText').pdf_extract_text(path));
+    }
+    return decode<ExtractReport>(() => binding('extractTextPages').pdf_extract_text_pages(path, pages));
 }
 
 /** Extracts images from every page into `outDir`. */

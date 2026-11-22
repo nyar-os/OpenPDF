@@ -6,9 +6,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
-    extract_images, extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks,
-    set_metadata, set_page_boxes, split, stamp,
+    extract_images, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes, merge, rotate_pages,
+    set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
+use serde_json::json;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -122,6 +123,43 @@ fn extract_text_bytes_reads_a_document_without_a_path() {
     assert_eq!(report.pages, 2);
     assert!(report.markdown.contains("Alpha"), "page one text: {}", report.markdown);
     assert!(report.markdown.contains("Beta"), "page two text: {}", report.markdown);
+}
+
+#[test]
+fn extract_text_pages_keeps_only_the_requested_pages_in_order() {
+    let workspace = Workspace::new();
+    let path = workspace.create("select.pdf", None, &["Alpha", "Beta", "Gamma"]);
+
+    let report = extract_text_pages(&path, "3,1").expect("extract selected pages");
+    assert_eq!(report["pages"], json!(2));
+    assert_eq!(report["sourcePages"], json!(3));
+    assert_eq!(report["selected"], json!([3, 1]));
+    let markdown = report["markdown"].as_str().expect("markdown");
+    let gamma = markdown.find("Gamma").expect("Gamma is selected");
+    let alpha = markdown.find("Alpha").expect("Alpha is selected");
+    assert!(gamma < alpha, "requested order is kept: {markdown}");
+    assert!(!markdown.contains("Beta"), "unselected pages are dropped: {markdown}");
+
+    let whole = extract_text_pages(&path, "1-3").expect("extract every page");
+    assert_eq!(whole["pages"], json!(3));
+    assert_eq!(whole["selected"], json!([1, 2, 3]));
+    let text = whole["markdown"].as_str().expect("markdown");
+    assert!(text.contains("Beta"));
+
+    let error = extract_text_pages(&path, "4").expect_err("page is outside the document");
+    assert_eq!(error.code(), "session/argument-invalid");
+    assert!(error.message().contains("3-page document"), "unexpected message: {}", error.message());
+}
+
+#[test]
+fn extract_text_pages_rejects_malformed_ranges() {
+    let workspace = Workspace::new();
+    let path = workspace.create("ranges.pdf", None, &["Alpha", "Beta"]);
+
+    for ranges in ["", "0", "2-1", "1,,2", "1,1", "a", "1-"] {
+        let error = extract_text_pages(&path, ranges).expect_err("invalid ranges");
+        assert_eq!(error.code(), "session/argument-invalid", "ranges `{ranges}`");
+    }
 }
 
 #[test]

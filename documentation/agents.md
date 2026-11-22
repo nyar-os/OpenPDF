@@ -37,7 +37,7 @@ open-pdf bookmarks <file> -o <out> --bookmark "Title:Page" [--bookmark "Title:Pa
 open-pdf fill-form <file> -o <out> --set Name=Value [--set Name=Value...]
 open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--page-size <size>] [--font <name>] [--font-size <pt>] [--margin <pt>] [--align <align>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--page-numbers] [--overwrite]
 open-pdf stamp <file> -o <out> --text <text> [--position <position>] [--font <name>] [--font-size <pt>] [--rotation <degrees>] [--opacity <value>] [--color <hex>] [--pages <list>]
-open-pdf extract-text <file> | --stdin
+open-pdf extract-text <file> [--pages <list>] | --stdin
 open-pdf extract-images <file> | --stdin -o <out-dir> [--name <stem>]
 ```
 
@@ -112,7 +112,7 @@ Report shapes:
 | `fill-form` | `{ path, filled, missing, pages }` |
 | `create` | `{ path, pages, bytes }` |
 | `stamp` | `{ path, pages, pagesStamped, bytes }` |
-| `extract-text` | `{ pages, markdown, losses: [{ code, page, message }] }` |
+| `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
 | `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` |
 
 Nested values:
@@ -165,6 +165,7 @@ Only `inspect`, `extract-text` and `extract-images` accept `--stdin`. A path and
 `--stdin` are mutually exclusive. Standard input is read to the end as raw PDF
 bytes; empty input fails with `open-pdf.cli.stdin-empty`. Writers and
 transformations never read from stdin, and `split` always reads a path.
+`extract-text --pages` needs a path: standard input cannot be paginated.
 
 ## Overwrite rules
 

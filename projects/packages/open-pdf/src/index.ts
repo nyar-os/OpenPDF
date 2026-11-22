@@ -149,9 +149,14 @@ export class OpenPDF {
         return service.stamp(path, out, request);
     }
 
-    /** Extracts text from content streams decoded through their filters. */
-    async extractText(path: string): Promise<ExtractReport> {
-        return service.extractText(path);
+    /**
+     * Extracts text from content streams decoded through their filters.
+     *
+     * `options.pages` is a one-based selection such as `1-3,5`; selected pages
+     * are extracted in the requested order and `report.selected` names them.
+     */
+    async extractText(path: string, options: { readonly pages?: string } = {}): Promise<ExtractReport> {
+        return service.extractText(path, options.pages);
     }
 
     /** Extracts images from every page into `outDir`. */
@@ -266,9 +271,14 @@ export class OpenPDF {
         return service.stamp(path, out, request);
     }
 
-    /** Extracts text from content streams decoded through their filters. */
-    static extractText(path: string): ExtractReport {
-        return service.extractText(path);
+    /**
+     * Extracts text from content streams decoded through their filters.
+     *
+     * `options.pages` is a one-based selection such as `1-3,5`; selected pages
+     * are extracted in the requested order and `report.selected` names them.
+     */
+    static extractText(path: string, options: { readonly pages?: string } = {}): ExtractReport {
+        return service.extractText(path, options.pages);
     }
 
     /** Extracts images from every page into `outDir`. */

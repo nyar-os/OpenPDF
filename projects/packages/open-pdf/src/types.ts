@@ -346,7 +346,12 @@ export interface ExtractLoss {
 
 /** Result of `extractText()`. */
 export interface ExtractReport {
+    /** Pages in the extracted projection: the selected count when `pages` was given. */
     readonly pages: number;
+    /** Pages in the source document; present when a page selection was used. */
+    readonly sourcePages?: number;
+    /** One-based source pages that were extracted, in extraction order. */
+    readonly selected?: readonly number[];
     readonly markdown: string;
     readonly losses: readonly ExtractLoss[];
 }

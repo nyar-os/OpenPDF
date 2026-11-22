@@ -727,11 +727,17 @@ cli
 cli
     .command('extract-text', 'cli.cmd.extract-text')
     .option('--stdin', 'cli.opt.stdin')
+    .option('--pages <ranges>', 'cli.opt.pages')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const useStdin = flag(options, 'stdin');
+        const pages = text(options, 'pages');
         if ((file === undefined) === !useStdin) {
             ctx.fail('open-pdf.cli.input-required', { message: 'pass one PDF path or `--stdin`, not both' });
+            return 2;
+        }
+        if (useStdin && pages !== undefined) {
+            ctx.fail('open-pdf.cli.pages-need-file', { message: '`--pages` needs a PDF path; standard input cannot be paginated' });
             return 2;
         }
         let report: ExtractReport;
@@ -744,7 +750,7 @@ cli
             report = await pdf.extractTextBytes(bytes);
         }
         else {
-            report = await pdf.extractText(file as string);
+            report = await pdf.extractText(file as string, pages === undefined ? {} : { pages });
         }
         const losses = report.losses.map((loss) => `loss ${loss.code} page=${loss.page} ${loss.message}`);
         const human = [report.markdown.length > 0 ? report.markdown : '(no text extracted)', ...losses].join('\n');

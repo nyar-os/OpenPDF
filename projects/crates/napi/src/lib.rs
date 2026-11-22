@@ -233,6 +233,14 @@ fn pdf_extract_text(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::extract_text(std::path::Path::new(&path)).map_err(failure)?)
 }
 
+/// Extracts text from selected one-based pages of one PDF file.
+#[function]
+fn pdf_extract_text_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let ranges = text(&ctx, 1)?;
+    respond(&ctx, &open_pdf_core::extract_text_pages(std::path::Path::new(&path), &ranges).map_err(failure)?)
+}
+
 /// Extracts images from one PDF file into a directory.
 #[function]
 fn pdf_extract_images(ctx: CallContext) -> Result<JsValue> {
@@ -296,6 +304,7 @@ register_module![
     pdf_fill_form,
     pdf_create,
     pdf_extract_text,
+    pdf_extract_text_pages,
     pdf_extract_images,
     pdf_inspect_bytes,
     pdf_extract_text_bytes,

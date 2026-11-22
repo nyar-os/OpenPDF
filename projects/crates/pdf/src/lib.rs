@@ -16,6 +16,90 @@ pub use document_pdf::{
     split_every, stamp,
 };
 
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+use serde_json::{Value, json};
+
+static TEMPORARY: AtomicU64 = AtomicU64::new(0);
+
+/// Extracts text from the selected one-based pages, in the requested order.
+///
+/// `ranges` accepts comma-separated pages and inclusive ranges such as
+/// `1-3,5`. A selection that is not the whole document in order is projected
+/// into a temporary classic PDF first, so filters still run through the same
+/// decoder. The report carries the extracted Markdown, its losses, the source
+/// page count and the pages that were actually extracted.
+pub fn extract_text_pages(path: &Path, ranges: &str) -> Result<Value, ServiceError> {
+    let report = inspect(path)?;
+    let selected = parse_page_ranges(ranges, report.pages)?;
+    let extracted = if selected.iter().copied().eq(1..=report.pages) {
+        extract_text(path)?
+    }
+    else {
+        let remove = (1..=report.pages).filter(|page| !selected.contains(page)).collect::<Vec<_>>();
+        let temporary = temporary_path();
+        let request = DocumentArrange { order: Some(selected.clone()), rotate: None, remove: Some(remove) };
+        let outcome = arrange(path, &temporary, &request).and_then(|_| extract_text(&temporary));
+        let _ = fs::remove_file(&temporary);
+        outcome?
+    };
+    Ok(json!({
+        "pages": extracted.pages,
+        "sourcePages": report.pages,
+        "selected": selected,
+        "markdown": extracted.markdown,
+        "losses": extracted.losses,
+    }))
+}
+
+/// Expands one-based ranges such as `1-3,5`, refusing pages the PDF cannot satisfy.
+fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, ServiceError> {
+    let mut selected = Vec::new();
+    for raw in ranges.split(',') {
+        let token = raw.trim();
+        if token.is_empty() {
+            return Err(invalid_pages("page ranges contain an empty entry"));
+        }
+        let (start, end) = match token.split_once('-') {
+            Some((start, end)) => (start.trim(), end.trim()),
+            None => (token, token),
+        };
+        let start = start.parse::<usize>().map_err(|_| invalid_pages(format!("invalid page range `{token}`")))?;
+        let end = end.parse::<usize>().map_err(|_| invalid_pages(format!("invalid page range `{token}`")))?;
+        if start == 0 || end == 0 {
+            return Err(invalid_pages("page numbers start at 1"));
+        }
+        if end < start {
+            return Err(invalid_pages(format!("page range `{token}` is reversed")));
+        }
+        if end > page_count {
+            return Err(invalid_pages(format!(
+                "page range `{token}` is outside the {page_count}-page document"
+            )));
+        }
+        for page in start..=end {
+            if selected.contains(&page) {
+                return Err(invalid_pages(format!("page {page} appears twice in the selection")));
+            }
+            selected.push(page);
+        }
+    }
+    Ok(selected)
+}
+
+fn invalid_pages(message: impl Into<String>) -> ServiceError {
+    ServiceError::new("session/argument-invalid", message)
+}
+
+fn temporary_path() -> PathBuf {
+    let unique = TEMPORARY.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("open-pdf-extract-{}-{unique}.pdf", std::process::id()))
+}
+
 /// Reports what this build actually supports.
 pub fn capabilities() -> serde_json::Value {
     serde_json::json!({
@@ -70,6 +154,7 @@ pub fn capabilities() -> serde_json::Value {
             "fillForm": "supported",
             "stamp": "supported",
             "extractText": "partial",
+            "extractTextPages": "supported",
             "extractImages": "supported"
         },
         "checks": {

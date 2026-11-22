@@ -110,6 +110,7 @@ Each task maps to one command. Replace the sample names with your own files.
 | Create a document | `open-pdf create -o notes.pdf --title "Notes" --page "Line one\|Line two"` |
 | Stamp every page | `open-pdf stamp combined.pdf -o draft.pdf --text "DRAFT {page}/{pages}" --position center` |
 | Extract text | `open-pdf extract-text combined.pdf` |
+| Extract selected pages | `open-pdf extract-text report.pdf --pages 1-3,5` |
 | Extract images | `open-pdf extract-images combined.pdf -o images/` |
 | Read from standard input | `cat input.pdf \| open-pdf inspect --stdin` |
 
