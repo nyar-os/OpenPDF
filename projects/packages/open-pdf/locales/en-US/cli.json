@@ -38,6 +38,7 @@
             "limit": "Maximum number of matches to report (default 100, max 500)",
             "ignore-case": "Compare ASCII letters case-insensitively",
             "whole-word": "Only match whole words on letter, digit or underscore boundaries",
+            "skip": "Discard this many matches before reporting any",
             "degrees": "Clockwise rotation for the selected pages: 90, 180 or 270",
             "box": "CropBox corners in points as left,bottom,right,top",
             "author": "Document author, empty text deletes it",

@@ -75,18 +75,20 @@ fn extract_selected(
 /// `losses` instead. `limit` defaults to 100 and is clamped to 1-500. With
 /// `match_case` off, ASCII letters compare case-insensitively while byte
 /// offsets still name the authored line. `whole_word` accepts only matches
-/// whose neighbouring characters are not word characters. Each hit carries the
-/// one-based line, a one-based column, byte offsets within the line and the
-/// matching fragment.
+/// whose neighbouring characters are not word characters. `skip` discards that
+/// many accepted matches before collecting, so callers can page through hits.
+/// Each hit carries the one-based line, a one-based column, byte offsets within
+/// the line and the matching fragment.
 pub fn search(
     path: &Path,
     query: &str,
     limit: Option<u32>,
     match_case: bool,
     whole_word: bool,
+    skip: u32,
 ) -> Result<Value, ServiceError> {
     let report = extract_text(path)?;
-    search_report(path, query, limit, match_case, whole_word, &report, None)
+    search_report(path, query, limit, match_case, whole_word, skip, &report, None)
 }
 
 /// Searches only the selected one-based pages, in the requested order.
@@ -95,6 +97,7 @@ pub fn search(
 /// `1-3,5`. The selection is projected the same way as
 /// [`extract_text_pages`], so hits report lines and columns within that
 /// projection while `sourcePages` and `selected` name the source pages.
+#[allow(clippy::too_many_arguments)]
 pub fn search_pages(
     path: &Path,
     query: &str,
@@ -102,17 +105,20 @@ pub fn search_pages(
     ranges: &str,
     match_case: bool,
     whole_word: bool,
+    skip: u32,
 ) -> Result<Value, ServiceError> {
     let (source_pages, selected, report) = extract_selected(path, ranges)?;
-    search_report(path, query, limit, match_case, whole_word, &report, Some((source_pages, &selected)))
+    search_report(path, query, limit, match_case, whole_word, skip, &report, Some((source_pages, &selected)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search_report(
     path: &Path,
     query: &str,
     limit: Option<u32>,
     match_case: bool,
     whole_word: bool,
+    skip: u32,
     report: &ExtractReport,
     selection: Option<(usize, &[usize])>,
 ) -> Result<Value, ServiceError> {
@@ -120,8 +126,10 @@ fn search_report(
         return Err(invalid_pages("`query` must be a non-empty string"));
     }
     let limit = limit.map_or(100usize, |value| value.clamp(1, 500) as usize);
+    let skip = skip as usize;
     let needle = if match_case { query.to_owned() } else { query.to_ascii_lowercase() };
     let mut hits = Vec::new();
+    let mut skipped = 0usize;
     let mut truncated = false;
     'lines: for (index, line) in report.markdown.lines().enumerate() {
         let haystack = if match_case { line.to_owned() } else { line.to_ascii_lowercase() };
@@ -131,6 +139,11 @@ fn search_report(
             let end = start + needle.len();
             if whole_word && !is_whole_word(line, start, end) {
                 from = start + line[start..].chars().next().map_or(1, char::len_utf8);
+                continue;
+            }
+            if skipped < skip {
+                skipped += 1;
+                from = end;
                 continue;
             }
             if hits.len() == limit {
@@ -153,6 +166,7 @@ fn search_report(
         "query": query,
         "matchCase": match_case,
         "wholeWord": whole_word,
+        "skip": skip,
         "limit": limit,
         "pages": report.pages,
         "lines": report.markdown.lines().count(),

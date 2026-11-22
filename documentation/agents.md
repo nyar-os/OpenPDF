@@ -39,7 +39,7 @@ open-pdf fill-form <file> -o <out> --set Name=Value [--set Name=Value...]
 open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--page-size <size>] [--font <name>] [--font-size <pt>] [--margin <pt>] [--align <align>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--page-numbers] [--overwrite]
 open-pdf stamp <file> -o <out> --text <text> [--position <position>] [--font <name>] [--font-size <pt>] [--rotation <degrees>] [--opacity <value>] [--color <hex>] [--pages <list>]
 open-pdf extract-text <file> [--pages <list>] | --stdin
-open-pdf search <file> <query> [--limit <n>] [--pages <list>] [--ignore-case] [--whole-word]
+open-pdf search <file> <query> [--limit <n>] [--pages <list>] [--ignore-case] [--whole-word] [--skip <n>]
 open-pdf extract-images <file> [--pages <list>] | --stdin -o <out-dir> [--name <stem>]
 ```
 
@@ -118,7 +118,7 @@ Report shapes:
 | `create` | `{ path, pages, bytes }` |
 | `stamp` | `{ path, pages, pagesStamped, bytes }` |
 | `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
-| `search` | `{ path, query, matchCase, wholeWord, limit, pages, sourcePages?, selected?, lines, truncated, hits, losses }` |
+| `search` | `{ path, query, matchCase, wholeWord, skip, limit, pages, sourcePages?, selected?, lines, truncated, hits, losses }` |
 | `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` (`page` is the source page when `--pages` is used) |
 
 Nested values:
@@ -140,7 +140,8 @@ Nested values:
   offsets still name the authored line. `--whole-word` (SDK `wholeWord: true`)
   accepts only matches whose neighbouring characters are not letters, digits or
   underscores, so `invoice` matches in `an invoice.` but not in `invoices`.
-  `truncated` is `true`
+  `--skip <n>` (SDK `skip`) discards that many accepted matches first, so
+  paging through results keeps stable offsets. `truncated` is `true`
   when more matches exist beyond `limit` (default 100, clamped to 1-500).
   `--pages` projects the selection the same way as `extract-text --pages`, so
   `hits` report lines within that projection while `sourcePages` and `selected`

@@ -749,6 +749,7 @@ cli
     .option('--pages <ranges>', 'cli.opt.pages')
     .option('--ignore-case', 'cli.opt.ignore-case')
     .option('--whole-word', 'cli.opt.whole-word')
+    .option('--skip <n>', 'cli.opt.skip')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const query = options._?.[1];
@@ -766,11 +767,22 @@ cli
             }
             limit = parsed;
         }
+        let skip = 0;
+        const skipText = text(options, 'skip');
+        if (skipText !== undefined) {
+            const parsed = Number(skipText);
+            if (!Number.isSafeInteger(parsed) || parsed < 0) {
+                ctx.fail('open-pdf.cli.search-limit', { message: '`--skip <n>` must be a non-negative integer' });
+                return 2;
+            }
+            skip = parsed;
+        }
         const report = await pdf.search(file, query, {
             limit,
             pages: text(options, 'pages'),
             matchCase: !flag(options, 'ignore-case'),
             wholeWord: flag(options, 'whole-word'),
+            skip,
         });
         const scope = report.selected === undefined ? '' : ` pages=${report.selected.join(',')}`;
         const lines = report.hits.map((hit) => `${hit.line}:${hit.column} ${hit.match}`);

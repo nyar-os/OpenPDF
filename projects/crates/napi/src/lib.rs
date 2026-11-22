@@ -264,9 +264,17 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
     };
     let match_case = ctx.args().get(3).map(|value| value.as_bool()).transpose()?.unwrap_or(true);
     let whole_word = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let skip = match ctx.args().get(5) {
+        Some(value) if !value.is_undefined()? => {
+            let value = value.as_i64()?;
+            u32::try_from(value).map_err(|_| Error::new("session/argument-invalid: skip must be a non-negative integer"))?
+        }
+        _ => 0,
+    };
     respond(
         &ctx,
-        &open_pdf_core::search(std::path::Path::new(&path), &query, limit, match_case, whole_word).map_err(failure)?,
+        &open_pdf_core::search(std::path::Path::new(&path), &query, limit, match_case, whole_word, skip)
+            .map_err(failure)?,
     )
 }
 
@@ -287,10 +295,25 @@ fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
     };
     let match_case = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(true);
     let whole_word = ctx.args().get(5).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let skip = match ctx.args().get(6) {
+        Some(value) if !value.is_undefined()? => {
+            let value = value.as_i64()?;
+            u32::try_from(value).map_err(|_| Error::new("session/argument-invalid: skip must be a non-negative integer"))?
+        }
+        _ => 0,
+    };
     respond(
         &ctx,
-        &open_pdf_core::search_pages(std::path::Path::new(&path), &query, limit, &ranges, match_case, whole_word)
-            .map_err(failure)?,
+        &open_pdf_core::search_pages(
+            std::path::Path::new(&path),
+            &query,
+            limit,
+            &ranges,
+            match_case,
+            whole_word,
+            skip,
+        )
+        .map_err(failure)?,
     )
 }
 

@@ -174,8 +174,9 @@ export class OpenPDF {
      * `true`; when `false`, ASCII letters compare case-insensitively.
      * `options.wholeWord` accepts only matches whose neighbouring characters
      * are not letters, digits or underscores. `options.pages` restricts the
-     * search to a one-based selection such as `1-3,5`. `limit` defaults to 100
-     * and is clamped to 1-500.
+     * search to a one-based selection such as `1-3,5`. `options.skip` drops
+     * that many accepted matches before collecting, so callers can page
+     * through hits. `limit` defaults to 100 and is clamped to 1-500.
      */
     async search(
         path: string,
@@ -185,6 +186,7 @@ export class OpenPDF {
             readonly pages?: string;
             readonly matchCase?: boolean;
             readonly wholeWord?: boolean;
+            readonly skip?: number;
         } = {},
     ): Promise<PdfSearchReport> {
         return service.search(
@@ -194,6 +196,7 @@ export class OpenPDF {
             options.pages,
             options.matchCase ?? true,
             options.wholeWord ?? false,
+            options.skip ?? 0,
         );
     }
 
@@ -339,6 +342,7 @@ export class OpenPDF {
             readonly pages?: string;
             readonly matchCase?: boolean;
             readonly wholeWord?: boolean;
+            readonly skip?: number;
         } = {},
     ): PdfSearchReport {
         return service.search(
@@ -348,6 +352,7 @@ export class OpenPDF {
             options.pages,
             options.matchCase ?? true,
             options.wholeWord ?? false,
+            options.skip ?? 0,
         );
     }
 

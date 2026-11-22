@@ -396,6 +396,8 @@ export interface PdfSearchReport {
     readonly matchCase: boolean;
     /** Whether only matches on word boundaries were accepted. */
     readonly wholeWord: boolean;
+    /** Matches discarded before collecting `hits`. */
+    readonly skip: number;
     /** Effective limit after clamping to 1-500. */
     readonly limit: number;
     readonly pages: number;

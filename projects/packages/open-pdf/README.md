@@ -10,7 +10,7 @@ wired to the same methods.
 - **Page edits** — `rotatePages()`, `setPageBoxes()`
 - **Metadata, outlines and forms** — `setMetadata()`, `setBookmarks()`, `fillForm()`
 - **Creation and stamping** — `create()`, `stamp()`
-- **Extraction** — `extractText(path, { pages })`, `search(path, query, { limit, pages, matchCase, wholeWord })`, `extractImages(path, outDir, { pages })`
+- **Extraction** — `extractText(path, { pages })`, `search(path, query, { limit, pages, matchCase, wholeWord, skip })`, `extractImages(path, outDir, { pages })`
 - **Byte input** — `inspectBytes()`, `extractTextBytes()`, `extractImagesBytes()`
 
 Each operation returns a report object; static compatibility wrappers mirror the

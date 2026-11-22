@@ -311,12 +311,13 @@ export function search(
     pages: string | undefined,
     matchCase: boolean,
     wholeWord: boolean,
+    skip: number,
 ): PdfSearchReport {
     if (pages === undefined) {
-        return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit, matchCase, wholeWord));
+        return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit, matchCase, wholeWord, skip));
     }
     return decode<PdfSearchReport>(() =>
-        binding('searchPages').pdf_search_pages(path, query, pages, limit, matchCase, wholeWord),
+        binding('searchPages').pdf_search_pages(path, query, pages, limit, matchCase, wholeWord, skip),
     );
 }
 
