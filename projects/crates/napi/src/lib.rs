@@ -263,7 +263,11 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
         _ => None,
     };
     let match_case = ctx.args().get(3).map(|value| value.as_bool()).transpose()?.unwrap_or(true);
-    respond(&ctx, &open_pdf_core::search(std::path::Path::new(&path), &query, limit, match_case).map_err(failure)?)
+    let whole_word = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    respond(
+        &ctx,
+        &open_pdf_core::search(std::path::Path::new(&path), &query, limit, match_case, whole_word).map_err(failure)?,
+    )
 }
 
 /// Searches the extracted text of the selected one-based pages.
@@ -282,9 +286,10 @@ fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
         _ => None,
     };
     let match_case = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(true);
+    let whole_word = ctx.args().get(5).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     respond(
         &ctx,
-        &open_pdf_core::search_pages(std::path::Path::new(&path), &query, limit, &ranges, match_case)
+        &open_pdf_core::search_pages(std::path::Path::new(&path), &query, limit, &ranges, match_case, whole_word)
             .map_err(failure)?,
     )
 }

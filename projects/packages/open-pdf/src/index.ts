@@ -172,15 +172,29 @@ export class OpenPDF {
      * Matching runs on the same Markdown as `extractText()`, so pages without
      * extractable text contribute no hits. `options.matchCase` defaults to
      * `true`; when `false`, ASCII letters compare case-insensitively.
-     * `options.pages` restricts the search to a one-based selection such as
-     * `1-3,5`. `limit` defaults to 100 and is clamped to 1-500.
+     * `options.wholeWord` accepts only matches whose neighbouring characters
+     * are not letters, digits or underscores. `options.pages` restricts the
+     * search to a one-based selection such as `1-3,5`. `limit` defaults to 100
+     * and is clamped to 1-500.
      */
     async search(
         path: string,
         query: string,
-        options: { readonly limit?: number; readonly pages?: string; readonly matchCase?: boolean } = {},
+        options: {
+            readonly limit?: number;
+            readonly pages?: string;
+            readonly matchCase?: boolean;
+            readonly wholeWord?: boolean;
+        } = {},
     ): Promise<PdfSearchReport> {
-        return service.search(path, query, options.limit, options.pages, options.matchCase ?? true);
+        return service.search(
+            path,
+            query,
+            options.limit,
+            options.pages,
+            options.matchCase ?? true,
+            options.wholeWord ?? false,
+        );
     }
 
     /**
@@ -320,9 +334,21 @@ export class OpenPDF {
     static search(
         path: string,
         query: string,
-        options: { readonly limit?: number; readonly pages?: string; readonly matchCase?: boolean } = {},
+        options: {
+            readonly limit?: number;
+            readonly pages?: string;
+            readonly matchCase?: boolean;
+            readonly wholeWord?: boolean;
+        } = {},
     ): PdfSearchReport {
-        return service.search(path, query, options.limit, options.pages, options.matchCase ?? true);
+        return service.search(
+            path,
+            query,
+            options.limit,
+            options.pages,
+            options.matchCase ?? true,
+            options.wholeWord ?? false,
+        );
     }
 
     /** Extracts images into `outDir`, optionally from the selected `pages`. */

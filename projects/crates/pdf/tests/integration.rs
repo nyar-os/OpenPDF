@@ -156,8 +156,8 @@ fn search_reports_line_scoped_matches_and_honours_the_limit() {
     let workspace = Workspace::new();
     let path = workspace.create("search.pdf", None, &["Alpha invoice one", "Beta invoice two"]);
 
-    let report = search(&path, "invoice", None, true).expect("search");
-    let insensitive = search(&path, "INVOICE", None, false).expect("case-insensitive search");
+    let report = search(&path, "invoice", None, true, false).expect("search");
+    let insensitive = search(&path, "INVOICE", None, false, false).expect("case-insensitive search");
     assert_eq!(insensitive["hits"].as_array().expect("hits").len(), report["hits"].as_array().expect("hits").len());
     assert_eq!(insensitive["matchCase"], json!(false));
     assert!(insensitive["hits"][0]["match"].as_str().is_some_and(|text| text.eq_ignore_ascii_case("invoice")));
@@ -174,11 +174,17 @@ fn search_reports_line_scoped_matches_and_honours_the_limit() {
         assert!(hit["column"].as_u64().expect("column") >= 1);
     }
 
-    let limited = search(&path, "invoice", Some(1), true).expect("limited search");
+    let limited = search(&path, "invoice", Some(1), true, false).expect("limited search");
     assert_eq!(limited["hits"].as_array().expect("hits").len(), 1);
     assert_eq!(limited["truncated"], json!(true));
 
-    let empty = search(&path, "   ", None, true).expect_err("empty query");
+    let whole = search(&path, "invoice", None, true, true).expect("whole-word search");
+    assert_eq!(whole["wholeWord"], json!(true));
+    assert_eq!(whole["hits"].as_array().expect("hits").len(), 2);
+    let partial = search(&path, "invo", None, true, true).expect("whole-word rejects a fragment");
+    assert!(partial["hits"].as_array().expect("hits").is_empty());
+
+    let empty = search(&path, "   ", None, true, false).expect_err("empty query");
     assert_eq!(empty.code(), "session/argument-invalid");
 }
 
@@ -187,7 +193,7 @@ fn search_pages_only_scans_the_selected_pages() {
     let workspace = Workspace::new();
     let path = workspace.create("search-pages.pdf", None, &["Alpha invoice one", "Beta invoice two", "Gamma invoice three"]);
 
-    let report = search_pages(&path, "invoice", None, "3,1", true).expect("search selected pages");
+    let report = search_pages(&path, "invoice", None, "3,1", true, false).expect("search selected pages");
     assert_eq!(report["sourcePages"], json!(3));
     assert_eq!(report["selected"], json!([3, 1]));
     assert_eq!(report["pages"], json!(2));
@@ -197,16 +203,16 @@ fn search_pages_only_scans_the_selected_pages() {
     assert!(hits.iter().any(|hit| hit["text"].as_str().unwrap_or_default().contains("Gamma")));
     assert!(!hits.iter().any(|hit| hit["text"].as_str().unwrap_or_default().contains("Beta")));
 
-    let whole = search_pages(&path, "invoice", Some(1), "1-3", true).expect("search every page");
+    let whole = search_pages(&path, "invoice", Some(1), "1-3", true, false).expect("search every page");
     assert_eq!(whole["sourcePages"], json!(3));
     assert_eq!(whole["selected"], json!([1, 2, 3]));
     assert_eq!(whole["hits"].as_array().expect("hits").len(), 1);
     assert_eq!(whole["truncated"], json!(true));
 
-    let empty = search_pages(&path, " ", None, "1", true).expect_err("empty query");
+    let empty = search_pages(&path, " ", None, "1", true, false).expect_err("empty query");
     assert_eq!(empty.code(), "session/argument-invalid");
 
-    let error = search_pages(&path, "invoice", None, "4", true).expect_err("page is outside the document");
+    let error = search_pages(&path, "invoice", None, "4", true, false).expect_err("page is outside the document");
     assert_eq!(error.code(), "session/argument-invalid");
 }
 

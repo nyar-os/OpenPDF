@@ -748,6 +748,7 @@ cli
     .option('--limit <n>', 'cli.opt.limit')
     .option('--pages <ranges>', 'cli.opt.pages')
     .option('--ignore-case', 'cli.opt.ignore-case')
+    .option('--whole-word', 'cli.opt.whole-word')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const query = options._?.[1];
@@ -769,6 +770,7 @@ cli
             limit,
             pages: text(options, 'pages'),
             matchCase: !flag(options, 'ignore-case'),
+            wholeWord: flag(options, 'whole-word'),
         });
         const scope = report.selected === undefined ? '' : ` pages=${report.selected.join(',')}`;
         const lines = report.hits.map((hit) => `${hit.line}:${hit.column} ${hit.match}`);

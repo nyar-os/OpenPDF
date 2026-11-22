@@ -394,6 +394,8 @@ export interface PdfSearchReport {
     readonly query: string;
     /** Whether ASCII letters were compared case-sensitively. */
     readonly matchCase: boolean;
+    /** Whether only matches on word boundaries were accepted. */
+    readonly wholeWord: boolean;
     /** Effective limit after clamping to 1-500. */
     readonly limit: number;
     readonly pages: number;

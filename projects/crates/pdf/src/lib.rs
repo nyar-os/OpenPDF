@@ -74,11 +74,19 @@ fn extract_selected(
 /// without extractable text cannot contribute hits; such pages are reported in
 /// `losses` instead. `limit` defaults to 100 and is clamped to 1-500. With
 /// `match_case` off, ASCII letters compare case-insensitively while byte
-/// offsets still name the authored line. Each hit carries the one-based line, a
-/// one-based column, byte offsets within the line and the matching fragment.
-pub fn search(path: &Path, query: &str, limit: Option<u32>, match_case: bool) -> Result<Value, ServiceError> {
+/// offsets still name the authored line. `whole_word` accepts only matches
+/// whose neighbouring characters are not word characters. Each hit carries the
+/// one-based line, a one-based column, byte offsets within the line and the
+/// matching fragment.
+pub fn search(
+    path: &Path,
+    query: &str,
+    limit: Option<u32>,
+    match_case: bool,
+    whole_word: bool,
+) -> Result<Value, ServiceError> {
     let report = extract_text(path)?;
-    search_report(path, query, limit, match_case, &report, None)
+    search_report(path, query, limit, match_case, whole_word, &report, None)
 }
 
 /// Searches only the selected one-based pages, in the requested order.
@@ -93,9 +101,10 @@ pub fn search_pages(
     limit: Option<u32>,
     ranges: &str,
     match_case: bool,
+    whole_word: bool,
 ) -> Result<Value, ServiceError> {
     let (source_pages, selected, report) = extract_selected(path, ranges)?;
-    search_report(path, query, limit, match_case, &report, Some((source_pages, &selected)))
+    search_report(path, query, limit, match_case, whole_word, &report, Some((source_pages, &selected)))
 }
 
 fn search_report(
@@ -103,6 +112,7 @@ fn search_report(
     query: &str,
     limit: Option<u32>,
     match_case: bool,
+    whole_word: bool,
     report: &ExtractReport,
     selection: Option<(usize, &[usize])>,
 ) -> Result<Value, ServiceError> {
@@ -117,12 +127,16 @@ fn search_report(
         let haystack = if match_case { line.to_owned() } else { line.to_ascii_lowercase() };
         let mut from = 0;
         while let Some(offset) = haystack[from..].find(&needle) {
+            let start = from + offset;
+            let end = start + needle.len();
+            if whole_word && !is_whole_word(line, start, end) {
+                from = start + line[start..].chars().next().map_or(1, char::len_utf8);
+                continue;
+            }
             if hits.len() == limit {
                 truncated = true;
                 break 'lines;
             }
-            let start = from + offset;
-            let end = start + needle.len();
             hits.push(json!({
                 "line": index + 1,
                 "column": start + 1,
@@ -138,6 +152,7 @@ fn search_report(
         "path": path.display().to_string(),
         "query": query,
         "matchCase": match_case,
+        "wholeWord": whole_word,
         "limit": limit,
         "pages": report.pages,
         "lines": report.markdown.lines().count(),
@@ -150,6 +165,20 @@ fn search_report(
         outcome["selected"] = json!(selected);
     }
     Ok(outcome)
+}
+
+/// Reports whether the byte span sits on word boundaries in `line`.
+///
+/// A boundary means the neighbouring character is absent or is not a letter,
+/// digit or underscore, so `cat` matches in `a cat.` but not in `concat`.
+fn is_whole_word(line: &str, start: usize, end: usize) -> bool {
+    let before = line[..start].chars().next_back();
+    let after = line[end..].chars().next();
+    !before.is_some_and(is_word_character) && !after.is_some_and(is_word_character)
+}
+
+fn is_word_character(character: char) -> bool {
+    character.is_alphanumeric() || character == '_'
 }
 
 /// Reads the outline tree of one PDF without rendering or rewriting it.
