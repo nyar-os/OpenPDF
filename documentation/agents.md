@@ -31,6 +31,7 @@ open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
 open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count>)
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
+open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
 open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
 open-pdf set-page-boxes <file> --pages <list> --box <l,b,r,t> -o <out> [--overwrite]
@@ -98,6 +99,8 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   Each part is `N` or `N-M` with `N <= M`. Out-of-range bounds are rejected; no
   operation truncates silently.
 - `--every` must be a positive integer.
+- `--times` on `duplicate-pages` is the number of copies written for each
+  selected page, between `2` and `100`; the default is `2`.
 - `--order` and `--remove` are comma-separated page numbers. When both are
   given, removal runs first and `--order` must list every surviving page once.
 - `--rotate` on `arrange` and `--degrees` on `rotate` are clockwise and must be
@@ -155,6 +158,7 @@ Report shapes:
 | `split` | `{ documents: [{ path, pages }] }` |
 | `arrange` | `{ path, pages }` |
 | `delete-pages` | `{ path, pages, removed, bytes }` |
+| `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |
 | `extract-pages` | `{ path, pages, kept, removed, bytes }` |
 | `rotate` | `{ path, pages, rotated, bytes }` |
 | `set-page-boxes` | `{ path, pages, cropped, bytes }` |
@@ -238,15 +242,16 @@ transformations never read from stdin, and `split` always reads a path.
 
 ## Overwrite rules
 
-`--overwrite` exists only on `merge`, `delete-pages`, `extract-pages`, `rotate`,
-`set-page-boxes` and `create`. The default is off. When a guarded output already
-exists and overwrite is not allowed, the operation fails with `io/exists`;
-nothing is replaced in place.
+`--overwrite` exists only on `merge`, `delete-pages`, `duplicate-pages`,
+`extract-pages`, `rotate`, `set-page-boxes` and `create`. The default is off.
+When a guarded output already exists and overwrite is not allowed, the operation
+fails with `io/exists`; nothing is replaced in place.
 
 `split`, `arrange`, `set-metadata`, `bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
-default for `merge`, `deletePages`, `keepPages`, `rotatePages`, `setPageBoxes`
-and `create`; the remaining methods do not accept an overwrite argument.
+default for `merge`, `deletePages`, `duplicatePages`, `keepPages`, `rotatePages`,
+`setPageBoxes` and `create`; the remaining methods do not accept an overwrite
+argument.
 
 ## Guardrails
 

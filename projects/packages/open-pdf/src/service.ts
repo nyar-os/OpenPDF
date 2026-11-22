@@ -19,6 +19,7 @@ import type {
     CreateReport,
     CreateRequest,
     DeletePagesReport,
+    DuplicatePagesReport,
     ExtractedImage,
     ExtractReport,
     FormFillReport,
@@ -128,6 +129,24 @@ export function arrange(path: string, out: string, ops: ArrangeRequest = {}): Ar
 export function deletePages(path: string, pages: string, out: string, overwrite = false): DeletePagesReport {
     return decode<DeletePagesReport>(() =>
         binding('deletePages').pdf_delete_pages(path, pages, out, overwrite),
+    );
+}
+
+/**
+ * Repeats the selected pages directly after themselves.
+ *
+ * The document keeps its order; each selected page is written `times` times,
+ * so `times: 2` doubles the selection in place.
+ */
+export function duplicatePages(
+    path: string,
+    pages: string,
+    times: number,
+    out: string,
+    overwrite = false,
+): DuplicatePagesReport {
+    return decode<DuplicatePagesReport>(() =>
+        binding('duplicatePages').pdf_duplicate_pages(path, pages, times, out, overwrite),
     );
 }
 

@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
+    duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     merge, outline, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
@@ -948,6 +949,33 @@ fn arrange_rejects_invalid_indices_duplicates_and_empty_results() {
     for ops in &cases {
         assert_invalid(arrange(&path, &out, ops), "session/argument-invalid");
     }
+}
+
+#[test]
+fn duplicate_pages_repeats_the_selection_in_place() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
+    let out = workspace.path("doubled.pdf");
+
+    let report = duplicate_pages(&path, "2", 2, &out, false).expect("duplicate pages");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["sourcePages"], json!(3));
+    assert_eq!(report["duplicated"], json!([2]));
+    assert_eq!(report["times"], json!(2));
+
+    let inspected = inspect(&out).expect("inspect duplicated");
+    assert_eq!(inspected.pages, 4);
+    let extracted = extract_text(&out).expect("extract duplicated");
+    let text = extracted.markdown;
+    let one = text.find("One").expect("One");
+    let first_two = text.find("Two").expect("first Two");
+    let second_two = text.rfind("Two").expect("second Two");
+    let three = text.find("Three").expect("Three");
+    assert!(one < first_two && first_two < second_two && second_two < three, "unexpected order: {text}");
+
+    assert_invalid(duplicate_pages(&path, "1", 2, &out, false), "io/exists");
+    assert_invalid(duplicate_pages(&path, "1", 1, &workspace.path("times.pdf"), true), "session/argument-invalid");
+    assert_invalid(duplicate_pages(&path, "9", 2, &workspace.path("range.pdf"), true), "session/argument-invalid");
 }
 
 #[test]

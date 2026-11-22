@@ -19,6 +19,7 @@ import type {
     CreateReport,
     CreateRequest,
     DeletePagesReport,
+    DuplicatePagesReport,
     ExtractedImage,
     ExtractReport,
     FormFillReport,
@@ -102,6 +103,17 @@ export class OpenPDF {
     /** Removes the selected pages into a new PDF. */
     async deletePages(path: string, pages: string, out: string, overwrite = this.defaultOverwrite): Promise<DeletePagesReport> {
         return service.deletePages(path, pages, out, overwrite);
+    }
+
+    /** Repeats the selected pages directly after themselves in a new PDF. */
+    async duplicatePages(
+        path: string,
+        pages: string,
+        times: number,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<DuplicatePagesReport> {
+        return service.duplicatePages(path, pages, times, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */
@@ -269,6 +281,17 @@ export class OpenPDF {
     /** Removes the selected pages into a new PDF. */
     static deletePages(path: string, pages: string, out: string, overwrite = false): DeletePagesReport {
         return service.deletePages(path, pages, out, overwrite);
+    }
+
+    /** Repeats the selected pages directly after themselves in a new PDF. */
+    static duplicatePages(
+        path: string,
+        pages: string,
+        times: number,
+        out: string,
+        overwrite = false,
+    ): DuplicatePagesReport {
+        return service.duplicatePages(path, pages, times, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */

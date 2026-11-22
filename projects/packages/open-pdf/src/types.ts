@@ -186,6 +186,19 @@ export interface ArrangeReport {
     readonly pages: number;
 }
 
+/** Result of `duplicatePages()`. */
+export interface DuplicatePagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the source document. */
+    readonly sourcePages: number;
+    /** One-based pages that were repeated, in document order. */
+    readonly duplicated: readonly number[];
+    /** Copies written for each selected page. */
+    readonly times: number;
+}
+
 /** Result of `deletePages()`. */
 export interface DeletePagesReport {
     readonly path: string;

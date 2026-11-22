@@ -413,6 +413,41 @@ cli
     });
 
 cli
+    .command('duplicate-pages', 'cli.cmd.duplicate-pages')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('--times <count>', 'cli.opt.times')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options, 'pages');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        const rawTimes = text(options, 'times');
+        const times = rawTimes === undefined ? 2 : Number(rawTimes);
+        if (!Number.isSafeInteger(times) || times < 2) {
+            ctx.fail('open-pdf.cli.times-args', { message: '`--times <count>` must be an integer of at least 2' });
+            return 2;
+        }
+        const report = await pdf.duplicatePages(file, pages, times, out, flag(options, 'overwrite'));
+        ctx.emitResult(report, `duplicated ${report.path} pages=${report.pages} times=${report.times}`);
+        return 0;
+    });
+
+cli
     .command('extract-pages', 'cli.cmd.extract-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')

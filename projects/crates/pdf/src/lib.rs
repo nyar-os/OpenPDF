@@ -302,6 +302,59 @@ fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, Serv
     Ok(selected)
 }
 
+/// Repeats the selected pages directly after themselves.
+///
+/// The document keeps its order; each selected page is written `times` times,
+/// so `times: 2` doubles the selection in place. The output is replaced when it
+/// already exists only if `overwrite` is true.
+pub fn duplicate_pages(
+    path: &Path,
+    pages: &str,
+    times: u32,
+    out: &Path,
+    overwrite: bool,
+) -> Result<serde_json::Value, ServiceError> {
+    if !(2..=100).contains(&times) {
+        return Err(invalid_pages("`times` must be between 2 and 100"));
+    }
+    let total = document_pdf::inspect(path)?.pages;
+    let selected = parse_page_ranges(pages, total)?;
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    // `arrange` refuses duplicate pages, so split the source into one-page
+    // files and merge the repeated sequence back in order.
+    let scratch = temporary_path().with_extension("dup");
+    let split = document_pdf::split_every(path, 1, &scratch)?;
+    let mut inputs = Vec::with_capacity(total + selected.len() * (times as usize - 1));
+    for part in &split.documents {
+        inputs.push(PathBuf::from(&part.path));
+        let page = part.path.rsplit_once("-p").and_then(|(_, tail)| tail.split('.').next()).and_then(|number| number.parse::<usize>().ok());
+        let Some(page) = page else {
+            let _ = fs::remove_dir_all(&scratch);
+            return Err(ServiceError::new("format/invalid", "split pages are not named by page number"));
+        };
+        if selected.contains(&page) {
+            for _ in 1..times {
+                inputs.push(PathBuf::from(&part.path));
+            }
+        }
+    }
+    let merged = document_pdf::merge(&inputs, out, true, None);
+    let _ = fs::remove_dir_all(&scratch);
+    let merged = merged?;
+    Ok(json!({
+        "path": merged.path,
+        "pages": merged.pages,
+        "sourcePages": total,
+        "duplicated": selected,
+        "times": times,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -359,6 +412,7 @@ pub fn capabilities() -> serde_json::Value {
             "split": "supported",
             "arrange": "supported",
             "deletePages": "supported",
+            "duplicatePages": "supported",
             "rotatePages": "supported",
             "setPageBoxes": "supported",
             "setMetadata": "supported",
