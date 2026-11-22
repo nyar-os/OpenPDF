@@ -63,7 +63,8 @@ lists every command, flag and report shape.
   metadata, bookmarks and AcroForm fields, including files that use
   cross-reference streams and object streams.
 - **Text and image extraction.** Decode Flate, LZW, ASCIIHex, ASCII85 and
-  RunLength streams for text; write embedded JPEGs unchanged and encode 8-bit
+  RunLength streams for text; extract only the pages you ask for; search the
+  extracted text line by line; write embedded JPEGs unchanged and encode 8-bit
   gray or RGB images as PNG. Every skipped part is reported.
 - **Metadata and outlines.** Rewrite title, author, subject, keywords, creator
   and producer, replace the outline tree, and fill form values while copying
@@ -111,6 +112,7 @@ Each task maps to one command. Replace the sample names with your own files.
 | Stamp every page | `open-pdf stamp combined.pdf -o draft.pdf --text "DRAFT {page}/{pages}" --position center` |
 | Extract text | `open-pdf extract-text combined.pdf` |
 | Extract selected pages | `open-pdf extract-text report.pdf --pages 1-3,5` |
+| Search extracted text | `open-pdf search contract.pdf "payment" --limit 20` |
 | Extract images | `open-pdf extract-images combined.pdf -o images/` |
 | Read from standard input | `cat input.pdf \| open-pdf inspect --stdin` |
 

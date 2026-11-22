@@ -56,6 +56,53 @@ pub fn extract_text_pages(path: &Path, ranges: &str) -> Result<Value, ServiceErr
     }))
 }
 
+/// Searches extracted text and reports every case-sensitive line match.
+///
+/// Matching runs on the Markdown produced by [`extract_text`], so a PDF page
+/// without extractable text cannot contribute hits; such pages are reported in
+/// `losses` instead. `limit` defaults to 100 and is clamped to 1-500. Each hit
+/// carries the one-based line, a one-based column, byte offsets within the line
+/// and the matching fragment.
+pub fn search(path: &Path, query: &str, limit: Option<u32>) -> Result<Value, ServiceError> {
+    if query.trim().is_empty() {
+        return Err(invalid_pages("`query` must be a non-empty string"));
+    }
+    let limit = limit.map_or(100usize, |value| value.clamp(1, 500) as usize);
+    let report = extract_text(path)?;
+    let mut hits = Vec::new();
+    let mut truncated = false;
+    'lines: for (index, line) in report.markdown.lines().enumerate() {
+        let mut from = 0;
+        while let Some(offset) = line[from..].find(query) {
+            if hits.len() == limit {
+                truncated = true;
+                break 'lines;
+            }
+            let start = from + offset;
+            let end = start + query.len();
+            hits.push(json!({
+                "line": index + 1,
+                "column": start + 1,
+                "start": start,
+                "end": end,
+                "match": &line[start..end],
+                "text": line,
+            }));
+            from = end;
+        }
+    }
+    Ok(json!({
+        "path": path.display().to_string(),
+        "query": query,
+        "limit": limit,
+        "pages": report.pages,
+        "lines": report.markdown.lines().count(),
+        "truncated": truncated,
+        "hits": hits,
+        "losses": report.losses,
+    }))
+}
+
 /// Expands one-based ranges such as `1-3,5`, refusing pages the PDF cannot satisfy.
 fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, ServiceError> {
     let mut selected = Vec::new();
@@ -155,6 +202,7 @@ pub fn capabilities() -> serde_json::Value {
             "stamp": "supported",
             "extractText": "partial",
             "extractTextPages": "supported",
+            "search": "partial",
             "extractImages": "supported"
         },
         "checks": {

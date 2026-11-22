@@ -38,6 +38,7 @@ open-pdf fill-form <file> -o <out> --set Name=Value [--set Name=Value...]
 open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--page-size <size>] [--font <name>] [--font-size <pt>] [--margin <pt>] [--align <align>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--page-numbers] [--overwrite]
 open-pdf stamp <file> -o <out> --text <text> [--position <position>] [--font <name>] [--font-size <pt>] [--rotation <degrees>] [--opacity <value>] [--color <hex>] [--pages <list>]
 open-pdf extract-text <file> [--pages <list>] | --stdin
+open-pdf search <file> <query> [--limit <n>]
 open-pdf extract-images <file> | --stdin -o <out-dir> [--name <stem>]
 ```
 
@@ -113,6 +114,7 @@ Report shapes:
 | `create` | `{ path, pages, bytes }` |
 | `stamp` | `{ path, pages, pagesStamped, bytes }` |
 | `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
+| `search` | `{ path, query, limit, pages, lines, truncated, hits, losses }` |
 | `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` |
 
 Nested values:
@@ -125,6 +127,10 @@ Nested values:
   the fully qualified `/T` chain and `type` is `Tx`, `Btn`, `Ch`, `Sig` or
   `null`.
 - Extracted images with an empty `path` were skipped; `loss` explains why.
+- `search` hits are `{ line, column, start, end, match, text }`. `line` and
+  `column` are one-based, `start` and `end` are byte offsets within `text`, and
+  matching is case-sensitive on the extracted Markdown. `truncated` is `true`
+  when more matches exist beyond `limit` (default 100, clamped to 1-500).
 
 ## Exit codes
 

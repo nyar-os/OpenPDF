@@ -29,6 +29,7 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    PdfSearchReport,
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
@@ -159,6 +160,17 @@ export class OpenPDF {
         return service.extractText(path, options.pages);
     }
 
+    /**
+     * Searches the extracted text and reports line-scoped matches.
+     *
+     * Matching is case-sensitive and runs on the same Markdown as
+     * `extractText()`, so pages without extractable text contribute no hits.
+     * `limit` defaults to 100 and is clamped to 1-500.
+     */
+    async search(path: string, query: string, options: { readonly limit?: number } = {}): Promise<PdfSearchReport> {
+        return service.search(path, query, options.limit);
+    }
+
     /** Extracts images from every page into `outDir`. */
     async extractImages(path: string, outDir: string): Promise<ExtractedImage[]> {
         return service.extractImages(path, outDir);
@@ -279,6 +291,11 @@ export class OpenPDF {
      */
     static extractText(path: string, options: { readonly pages?: string } = {}): ExtractReport {
         return service.extractText(path, options.pages);
+    }
+
+    /** Searches the extracted text and reports line-scoped matches. */
+    static search(path: string, query: string, options: { readonly limit?: number } = {}): PdfSearchReport {
+        return service.search(path, query, options.limit);
     }
 
     /** Extracts images from every page into `outDir`. */

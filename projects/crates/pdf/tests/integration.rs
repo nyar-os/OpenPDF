@@ -7,7 +7,7 @@ use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
     extract_images, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes, merge, rotate_pages,
-    set_bookmarks, set_metadata, set_page_boxes, split, stamp,
+    search, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
 use serde_json::json;
 
@@ -149,6 +149,33 @@ fn extract_text_pages_keeps_only_the_requested_pages_in_order() {
     let error = extract_text_pages(&path, "4").expect_err("page is outside the document");
     assert_eq!(error.code(), "session/argument-invalid");
     assert!(error.message().contains("3-page document"), "unexpected message: {}", error.message());
+}
+
+#[test]
+fn search_reports_line_scoped_matches_and_honours_the_limit() {
+    let workspace = Workspace::new();
+    let path = workspace.create("search.pdf", None, &["Alpha invoice one", "Beta invoice two"]);
+
+    let report = search(&path, "invoice", None).expect("search");
+    assert_eq!(report["query"], json!("invoice"));
+    assert_eq!(report["truncated"], json!(false));
+    let hits = report["hits"].as_array().expect("hits");
+    assert_eq!(hits.len(), 2);
+    for hit in hits {
+        let text = hit["text"].as_str().expect("line text");
+        let start = hit["start"].as_u64().expect("start") as usize;
+        assert_eq!(hit["match"], json!("invoice"));
+        assert_eq!(&text[start..start + "invoice".len()], "invoice");
+        assert!(hit["line"].as_u64().expect("line") >= 1);
+        assert!(hit["column"].as_u64().expect("column") >= 1);
+    }
+
+    let limited = search(&path, "invoice", Some(1)).expect("limited search");
+    assert_eq!(limited["hits"].as_array().expect("hits").len(), 1);
+    assert_eq!(limited["truncated"], json!(true));
+
+    let empty = search(&path, "   ", None).expect_err("empty query");
+    assert_eq!(empty.code(), "session/argument-invalid");
 }
 
 #[test]

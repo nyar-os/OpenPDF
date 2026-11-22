@@ -29,6 +29,7 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    PdfSearchReport,
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
@@ -294,6 +295,11 @@ export function extractText(path: string, pages?: string): ExtractReport {
         return decode<ExtractReport>(() => binding('extractText').pdf_extract_text(path));
     }
     return decode<ExtractReport>(() => binding('extractTextPages').pdf_extract_text_pages(path, pages));
+}
+
+/** Searches extracted text and reports line-scoped matches. */
+export function search(path: string, query: string, limit?: number): PdfSearchReport {
+    return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit));
 }
 
 /** Extracts images from every page into `outDir`. */

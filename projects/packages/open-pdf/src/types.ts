@@ -356,6 +356,36 @@ export interface ExtractReport {
     readonly losses: readonly ExtractLoss[];
 }
 
+/** One line-scoped match reported by `search()`. */
+export interface PdfSearchHit {
+    /** One-based line in the extracted Markdown. */
+    readonly line: number;
+    /** One-based byte column within the line. */
+    readonly column: number;
+    /** Byte offset of the match within its line. */
+    readonly start: number;
+    /** Byte offset just past the match within its line. */
+    readonly end: number;
+    /** Matching fragment. */
+    readonly match: string;
+    /** Whole line that contains the match. */
+    readonly text: string;
+}
+
+/** Result of `search()`. */
+export interface PdfSearchReport {
+    readonly path: string;
+    readonly query: string;
+    /** Effective limit after clamping to 1-500. */
+    readonly limit: number;
+    readonly pages: number;
+    readonly lines: number;
+    /** Whether more matches exist beyond `limit`. */
+    readonly truncated: boolean;
+    readonly hits: readonly PdfSearchHit[];
+    readonly losses: readonly ExtractLoss[];
+}
+
 /** One image reached through a page's `/Resources /XObject` graph. */
 export interface ExtractedImage {
     /** One-based page number. */

@@ -725,6 +725,35 @@ cli
     });
 
 cli
+    .command('search', 'cli.cmd.search')
+    .option('--limit <n>', 'cli.opt.limit')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const query = options._?.[1];
+        if (file === undefined || query === undefined || query.trim().length === 0) {
+            ctx.fail('open-pdf.cli.search-args', { message: 'a PDF file and a non-empty query are required' });
+            return 2;
+        }
+        let limit: number | undefined;
+        const limitText = text(options, 'limit');
+        if (limitText !== undefined) {
+            const parsed = Number(limitText);
+            if (!Number.isSafeInteger(parsed) || parsed < 1) {
+                ctx.fail('open-pdf.cli.search-limit', { message: '`--limit <n>` must be a positive integer' });
+                return 2;
+            }
+            limit = parsed;
+        }
+        const report = await pdf.search(file, query, { limit });
+        const lines = report.hits.map((hit) => `${hit.line}:${hit.column} ${hit.match}`);
+        ctx.emitResult(
+            report,
+            [`${report.hits.length} hit(s) for ${JSON.stringify(report.query)}`, ...lines].join('\n'),
+        );
+        return 0;
+    });
+
+cli
     .command('extract-text', 'cli.cmd.extract-text')
     .option('--stdin', 'cli.opt.stdin')
     .option('--pages <ranges>', 'cli.opt.pages')
