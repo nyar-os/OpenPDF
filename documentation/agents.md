@@ -24,6 +24,7 @@ Use `open-pdf <command> --help` for the localized help text of one command.
 
 ```text
 open-pdf capabilities
+open-pdf open <file> [--print]
 open-pdf inspect <file> | --stdin
 open-pdf outline <file>
 open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
@@ -45,6 +46,51 @@ open-pdf extract-images <file> [--pages <list>] | --stdin -o <out-dir> [--name <
 
 `-o` is `--out` everywhere except `split` and `extract-images`, where it is
 `--out-dir`.
+
+`open` is the only reader entry this build ships: it hands the file to the
+platform viewer (`cmd /C start`, `open` or `xdg-open`). There is no bundled PDF
+GUI or page-thumbnail editor yet; `--print` reports the command without
+launching it, which is the useful form on servers and in tests.
+
+## Recommended workflows
+
+Keep the CLI for short, one-shot tasks: `create`, `open`, `inspect`, `merge`,
+`extract-text` and `search`. Anything that selects pages by a rule, fills several
+form fields, applies a batch crop or stamp, or needs a review step belongs in a
+TypeScript script built on `new OpenPDF()`. The CLI still accepts those commands
+for compatibility, but new agents should compose the SDK instead.
+
+```ts
+import { OpenPDF } from '@wae/open-pdf';
+
+const pdf = new OpenPDF({ overwrite: true });
+
+// Assemble: create a cover, drop unwanted pages, then merge in rule order.
+const cover = await pdf.create({
+    out: 'build/cover.pdf',
+    title: 'Q4 report',
+    pages: ['Q4 report', 'Prepared for ACME'],
+});
+const body = await pdf.arrange('raw.pdf', 'build/body.pdf', { remove: [1, 2, 8] });
+const merged = await pdf.merge([cover.path, body.path], 'build/report.pdf');
+
+// Fill fields, crop the first pages and stamp every page.
+await pdf.fillForm(merged.path, 'build/filled.pdf', { Customer: 'ACME', Approved: true });
+await pdf.setPageBoxes('build/filled.pdf', '1-3', [18, 18, 594, 774], 'build/cropped.pdf');
+await pdf.stamp('build/cropped.pdf', 'build/final.pdf', {
+    text: 'Draft {page}/{pages}',
+    position: 'footer',
+    opacity: 0.5,
+});
+
+// Reopen the result: the report proves the file is readable after writing.
+const info = await pdf.inspect('build/final.pdf');
+console.log(info.pages, info.metadata.title);
+```
+
+Run `tsx build.ts` (or the project's TypeScript runner) from a directory that
+contains the input PDFs. Failure codes such as `session/argument-invalid` or
+`io/exists` are stable and worth branching on.
 
 ## Flag values
 

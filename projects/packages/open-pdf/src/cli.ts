@@ -7,7 +7,9 @@
  * not grow its own parser.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createCli, type ParsedOptions } from '@wae/commander';
@@ -180,6 +182,37 @@ function describeInspect(report: PdfInspectReport): string {
     }
     return lines.join('\n');
 }
+
+cli
+    .command('open', 'cli.cmd.open')
+    .option('--print', 'cli.opt.print')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        const opener = process.platform === 'win32' ? 'cmd /C start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+        if (flag(options, 'print')) {
+            ctx.emitResult({ path: file, opener, opened: false }, `would open ${file}`);
+            return 0;
+        }
+        if (!fs.existsSync(file)) {
+            ctx.fail('open-pdf.cli.file-not-found', { message: `${file} does not exist` });
+            return 1;
+        }
+        const result =
+            process.platform === 'win32'
+                ? spawnSync('cmd', ['/C', 'start', '', file], { stdio: 'ignore' })
+                : spawnSync(opener, [file], { stdio: 'ignore' });
+        if (result.error || result.status !== 0) {
+            const detail = result.error?.message ?? `exit ${result.status ?? 'unknown'}`;
+            ctx.fail('open-pdf.cli.open-failed', { message: `cannot open ${file} with ${opener}: ${detail}` });
+            return 1;
+        }
+        ctx.emitResult({ path: file, opener, opened: true }, `opened ${file}`);
+        return 0;
+    });
 
 cli.command('capabilities', 'cli.cmd.capabilities').actionCtx(async (_options, _args, ctx) => {
     const matrix = await pdf.capabilities();

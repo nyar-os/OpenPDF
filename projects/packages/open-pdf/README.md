@@ -17,13 +17,22 @@ Each operation returns a report object; static compatibility wrappers mirror the
 session methods. Failures carry a stable `code` such as `io/exists` or
 `session/argument-invalid`.
 
+## CLI quick start
+
+```bash
+open-pdf create -o cover.pdf --title Cover --page "Hello" --overwrite
+open-pdf inspect cover.pdf
+open-pdf open cover.pdf
+```
+
 ## Example
 
 ```ts
 import { OpenPDF } from '@wae/open-pdf';
 
 const pdf = new OpenPDF({ overwrite: true });
-const report = await pdf.merge(['cover.pdf', 'body.pdf'], 'combined.pdf');
+const created = await pdf.create({ out: 'cover.pdf', title: 'Cover', pages: ['Hello'] });
+const report = await pdf.merge([created.path, 'body.pdf'], 'combined.pdf');
 const info = await pdf.inspect(report.path);
 
 console.log(info.pages, info.metadata.title);

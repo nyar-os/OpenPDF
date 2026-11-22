@@ -2,6 +2,7 @@
     "cli": {
         "intro": "OpenPDF — create, inspect, merge, split and extract PDFs without external tools.",
         "cmd": {
+            "open": "Open a PDF in the platform's default viewer, or print the command with --print",
             "capabilities": "Print what this build supports, honestly",
             "inspect": "Show version, pages, metadata, page sizes and outlines",
             "outline": "Print the outline tree with entry count and nesting depth",
@@ -22,6 +23,7 @@
             "extract-images": "Write embedded JPEG and PNG-encodable images to a directory"
         },
         "opt": {
+            "print": "Print the viewer command without launching it",
             "out": "Output file",
             "title": "Document title",
             "overwrite": "Replace the output file when it already exists",
