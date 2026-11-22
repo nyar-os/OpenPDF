@@ -392,6 +392,8 @@ export interface PdfSearchHit {
 export interface PdfSearchReport {
     readonly path: string;
     readonly query: string;
+    /** Whether ASCII letters were compared case-sensitively. */
+    readonly matchCase: boolean;
     /** Effective limit after clamping to 1-500. */
     readonly limit: number;
     readonly pages: number;

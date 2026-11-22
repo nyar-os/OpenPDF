@@ -304,11 +304,11 @@ export function extractText(path: string, pages?: string): ExtractReport {
 }
 
 /** Searches extracted text and reports line-scoped matches. */
-export function search(path: string, query: string, limit?: number, pages?: string): PdfSearchReport {
+export function search(path: string, query: string, limit: number | undefined, pages: string | undefined, matchCase: boolean): PdfSearchReport {
     if (pages === undefined) {
-        return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit));
+        return decode<PdfSearchReport>(() => binding('search').pdf_search(path, query, limit, matchCase));
     }
-    return decode<PdfSearchReport>(() => binding('searchPages').pdf_search_pages(path, query, pages, limit));
+    return decode<PdfSearchReport>(() => binding('searchPages').pdf_search_pages(path, query, pages, limit, matchCase));
 }
 
 /** Extracts images from every page into `outDir`, or only from `pages`. */

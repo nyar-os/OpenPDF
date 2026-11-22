@@ -169,17 +169,18 @@ export class OpenPDF {
     /**
      * Searches the extracted text and reports line-scoped matches.
      *
-     * Matching is case-sensitive and runs on the same Markdown as
-     * `extractText()`, so pages without extractable text contribute no hits.
+     * Matching runs on the same Markdown as `extractText()`, so pages without
+     * extractable text contribute no hits. `options.matchCase` defaults to
+     * `true`; when `false`, ASCII letters compare case-insensitively.
      * `options.pages` restricts the search to a one-based selection such as
      * `1-3,5`. `limit` defaults to 100 and is clamped to 1-500.
      */
     async search(
         path: string,
         query: string,
-        options: { readonly limit?: number; readonly pages?: string } = {},
+        options: { readonly limit?: number; readonly pages?: string; readonly matchCase?: boolean } = {},
     ): Promise<PdfSearchReport> {
-        return service.search(path, query, options.limit, options.pages);
+        return service.search(path, query, options.limit, options.pages, options.matchCase ?? true);
     }
 
     /**
@@ -319,9 +320,9 @@ export class OpenPDF {
     static search(
         path: string,
         query: string,
-        options: { readonly limit?: number; readonly pages?: string } = {},
+        options: { readonly limit?: number; readonly pages?: string; readonly matchCase?: boolean } = {},
     ): PdfSearchReport {
-        return service.search(path, query, options.limit, options.pages);
+        return service.search(path, query, options.limit, options.pages, options.matchCase ?? true);
     }
 
     /** Extracts images into `outDir`, optionally from the selected `pages`. */

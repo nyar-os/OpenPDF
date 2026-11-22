@@ -747,6 +747,7 @@ cli
     .command('search', 'cli.cmd.search')
     .option('--limit <n>', 'cli.opt.limit')
     .option('--pages <ranges>', 'cli.opt.pages')
+    .option('--ignore-case', 'cli.opt.ignore-case')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const query = options._?.[1];
@@ -764,7 +765,11 @@ cli
             }
             limit = parsed;
         }
-        const report = await pdf.search(file, query, { limit, pages: text(options, 'pages') });
+        const report = await pdf.search(file, query, {
+            limit,
+            pages: text(options, 'pages'),
+            matchCase: !flag(options, 'ignore-case'),
+        });
         const scope = report.selected === undefined ? '' : ` pages=${report.selected.join(',')}`;
         const lines = report.hits.map((hit) => `${hit.line}:${hit.column} ${hit.match}`);
         ctx.emitResult(

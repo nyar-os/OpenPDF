@@ -68,16 +68,17 @@ fn extract_selected(
     Ok((report.pages, selected, extracted))
 }
 
-/// Searches extracted text and reports every case-sensitive line match.
+/// Searches extracted text and reports every line match.
 ///
 /// Matching runs on the Markdown produced by [`extract_text`], so a PDF page
 /// without extractable text cannot contribute hits; such pages are reported in
-/// `losses` instead. `limit` defaults to 100 and is clamped to 1-500. Each hit
-/// carries the one-based line, a one-based column, byte offsets within the line
-/// and the matching fragment.
-pub fn search(path: &Path, query: &str, limit: Option<u32>) -> Result<Value, ServiceError> {
+/// `losses` instead. `limit` defaults to 100 and is clamped to 1-500. With
+/// `match_case` off, ASCII letters compare case-insensitively while byte
+/// offsets still name the authored line. Each hit carries the one-based line, a
+/// one-based column, byte offsets within the line and the matching fragment.
+pub fn search(path: &Path, query: &str, limit: Option<u32>, match_case: bool) -> Result<Value, ServiceError> {
     let report = extract_text(path)?;
-    search_report(path, query, limit, &report, None)
+    search_report(path, query, limit, match_case, &report, None)
 }
 
 /// Searches only the selected one-based pages, in the requested order.
@@ -91,15 +92,17 @@ pub fn search_pages(
     query: &str,
     limit: Option<u32>,
     ranges: &str,
+    match_case: bool,
 ) -> Result<Value, ServiceError> {
     let (source_pages, selected, report) = extract_selected(path, ranges)?;
-    search_report(path, query, limit, &report, Some((source_pages, &selected)))
+    search_report(path, query, limit, match_case, &report, Some((source_pages, &selected)))
 }
 
 fn search_report(
     path: &Path,
     query: &str,
     limit: Option<u32>,
+    match_case: bool,
     report: &ExtractReport,
     selection: Option<(usize, &[usize])>,
 ) -> Result<Value, ServiceError> {
@@ -107,17 +110,19 @@ fn search_report(
         return Err(invalid_pages("`query` must be a non-empty string"));
     }
     let limit = limit.map_or(100usize, |value| value.clamp(1, 500) as usize);
+    let needle = if match_case { query.to_owned() } else { query.to_ascii_lowercase() };
     let mut hits = Vec::new();
     let mut truncated = false;
     'lines: for (index, line) in report.markdown.lines().enumerate() {
+        let haystack = if match_case { line.to_owned() } else { line.to_ascii_lowercase() };
         let mut from = 0;
-        while let Some(offset) = line[from..].find(query) {
+        while let Some(offset) = haystack[from..].find(&needle) {
             if hits.len() == limit {
                 truncated = true;
                 break 'lines;
             }
             let start = from + offset;
-            let end = start + query.len();
+            let end = start + needle.len();
             hits.push(json!({
                 "line": index + 1,
                 "column": start + 1,
@@ -132,6 +137,7 @@ fn search_report(
     let mut outcome = json!({
         "path": path.display().to_string(),
         "query": query,
+        "matchCase": match_case,
         "limit": limit,
         "pages": report.pages,
         "lines": report.markdown.lines().count(),
