@@ -26,7 +26,7 @@ Use `open-pdf <command> --help` for the localized help text of one command.
 open-pdf capabilities
 open-pdf open <file> [--print]
 open-pdf inspect <file> | --stdin
-open-pdf outline <file>
+open-pdf outline <file> [--depth <n>]
 open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
 open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count>)
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
@@ -174,7 +174,9 @@ Nested values:
 - `pageSizes[]`: `{ widthPt, heightPt, rotation }`.
 - `bookmarks[]` from `inspect` and `outline`: `{ title, depth }`, where `depth`
   is one-based and top-level entries are `1`. `outline` also reports `count`
-  and `maxDepth` (`0` for a document without an outline).
+  and `maxDepth` (`0` for a document without an outline). Pass `--depth <n>`
+  (SDK `outline(path, { depth })`) to drop entries nested deeper than `n`;
+  `count` and `maxDepth` are recomputed from the surviving entries.
 - `formFields[]`: `{ name, type, value, readOnly, required }`, where `name` is
   the fully qualified `/T` chain and `type` is `Tx`, `Btn`, `Ch`, `Sig` or
   `null`.

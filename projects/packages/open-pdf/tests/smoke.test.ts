@@ -146,3 +146,26 @@ test('setPageBoxes writes a CropBox on the selected pages', { skip: withoutAddon
         await rm(dir, { recursive: true, force: true });
     }
 });
+
+test('outline drops entries deeper than the requested depth', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const out = path.join(dir, 'bookmarked.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two'], overwrite: true });
+        await OpenPDF.setBookmarks(source, out, [
+            { title: 'Top', page: 1 },
+            { title: 'Nested', page: 2, depth: 1 },
+        ]);
+        const full = OpenPDF.outline(out);
+        assert.equal(full.count, 2);
+        assert.equal(full.maxDepth, 2);
+        const shallow = OpenPDF.outline(out, { depth: 1 });
+        assert.equal(shallow.count, 1);
+        assert.equal(shallow.maxDepth, 1);
+        assert.deepEqual(shallow.bookmarks.map((bookmark) => bookmark.title), ['Top']);
+        assert.throws(() => OpenPDF.outline(out, { depth: 0 }), RangeError);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});

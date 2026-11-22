@@ -248,13 +248,19 @@ cli
 
 cli
     .command('outline', 'cli.cmd.outline')
+    .option('--depth <n>', 'cli.opt.outline-depth')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         if (file === undefined) {
             ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
             return 2;
         }
-        const report = await pdf.outline(file);
+        const depth = decimal(options, 'depth');
+        if (depth === null || (depth !== undefined && (!Number.isInteger(depth) || depth < 1))) {
+            ctx.fail('open-pdf.cli.depth-invalid', { message: '`--depth` must be a positive integer' });
+            return 2;
+        }
+        const report = await pdf.outline(file, { depth });
         const human = report.count === 0
             ? `${report.path} pages=${report.pages} (no outline)`
             : [

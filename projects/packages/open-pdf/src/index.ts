@@ -74,9 +74,9 @@ export class OpenPDF {
         return service.inspect(path);
     }
 
-    /** Reads the outline tree of one PDF with entry counts and nesting depth. */
-    async outline(path: string): Promise<PdfOutlineReport> {
-        return service.outline(path);
+    /** Reads the outline tree of one PDF, optionally capped at `options.depth`. */
+    async outline(path: string, options: { readonly depth?: number } = {}): Promise<PdfOutlineReport> {
+        return limitOutline(service.outline(path), options.depth);
     }
 
     /** Concatenates PDF files in the given order. */
@@ -241,9 +241,9 @@ export class OpenPDF {
         return service.inspect(path);
     }
 
-    /** Reads the outline tree of one PDF with entry counts and nesting depth. */
-    static outline(path: string): PdfOutlineReport {
-        return service.outline(path);
+    /** Reads the outline tree of one PDF, optionally capped at `options.depth`. */
+    static outline(path: string, options: { readonly depth?: number } = {}): PdfOutlineReport {
+        return limitOutline(service.outline(path), options.depth);
     }
 
     /** Concatenates PDF files in the given order. */
@@ -375,4 +375,21 @@ export class OpenPDF {
     static extractImagesBytes(bytes: Uint8Array, outDir: string, stem: string): ExtractedImage[] {
         return service.extractImagesBytes(bytes, outDir, stem);
     }
+}
+
+/** Drops outline entries deeper than `depth` and recomputes the summary. */
+function limitOutline(report: PdfOutlineReport, depth: number | undefined): PdfOutlineReport {
+    if (depth === undefined) {
+        return report;
+    }
+    if (!Number.isInteger(depth) || depth < 1) {
+        throw new RangeError('`depth` must be a positive integer');
+    }
+    const bookmarks = report.bookmarks.filter((bookmark) => bookmark.depth <= depth);
+    return {
+        ...report,
+        bookmarks,
+        count: bookmarks.length,
+        maxDepth: bookmarks.reduce((deepest, bookmark) => Math.max(deepest, bookmark.depth), 0),
+    };
 }
