@@ -2,186 +2,120 @@
 
 ![PDF 1.7](https://img.shields.io/badge/format-PDF%201.7-blue)
 ![Merge Split Create](https://img.shields.io/badge/merge%20%7C%20split%20%7C%20create-built--in-brightgreen)
-![No PDF library](https://img.shields.io/badge/PDF%20library-none-lightgrey)
+![No external PDF library](https://img.shields.io/badge/PDF%20library-none-lightgrey)
+![License MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue)
 
-Generate, merge, split and inspect PDF files from one command line or one small
-SDK. The built-in engine parses the page tree, metadata, outlines, classic and
-stream-based cross-reference tables, object streams and Flate-compressed streams
-itself, and writes standard PDF 1.7 files — no external PDF library, no Adobe
-Acrobat, no system dependency.
+[Package](./projects/packages/open-pdf/README.md) · [Agent reference](./documentation/agents.md) · [License](./License.md)
 
-## ✨ What you can do
+## 💡 What is OpenPDF?
 
-- Create a PDF from text with selectable paper size (`a3`/`a4`/`a5`/`letter`/
-  `legal`/`tabloid` or `WIDTHxHEIGHT`), base-14 font, font size, margins,
-  left/center/right alignment, automatic wrapping and automatic pagination.
-- Write title, author, subject, keywords and creator metadata, and draw a
-  `page / total` footer.
-- Merge any number of PDFs and keep their page order.
-- Split by 1-based ranges such as `1-5,10,15-20`, or into fixed-size chunks.
-- Reorder, remove and rotate pages without re-rendering them.
-- Delete pages by a 1-based range list such as `2,5-7`, keeping the rest in order.
-- Keep only the selected pages, by a 1-based range list, in source order.
-- Rotate only the selected pages clockwise by 90, 180 or 270 degrees.
-- Write a custom `/CropBox` on the selected pages without touching `/MediaBox`.
-- Rewrite the document information dictionary.
-- Paint a text stamp — watermark, header or footer — on every page or a page
-  range, with font, size, rotation, opacity and colour control. `{page}` and
-  `{pages}` placeholders are substituted per page.
-- Read version, page count, page geometry, document metadata, bookmarks and
-  AcroForm fields from classic PDFs as well as PDFs that use cross-reference and
-  object streams.
-- Extract text from Flate, LZW, ASCIIHex, ASCII85 and RunLength streams and
-  report every skipped part.
-- Inspect, extract text and extract images from raw PDF bytes or standard input,
-  so a document piped from another process needs no temporary file.
-- Extract embedded images: JPEG payloads are written unchanged and 8-bit
-  DeviceGray/DeviceRGB streams become PNG (with `/SMask` alpha).
+OpenPDF is a command-line tool and a small TypeScript SDK for practical PDF
+surgery: combine documents, cut them into the pages you need, reorder or rotate
+pages, rewrite metadata and outlines, fill AcroForm fields, stamp text, extract
+text and embedded images, and create simple new PDFs from text. It operates on
+the pages that already exist instead of re-rendering them, and every operation is
+a reproducible command that can run by hand, inside a script, or under an agent.
 
-## 🚀 Usage
+It is not a browser-based PDF viewer or editor, and it is not a replacement for
+Acrobat: there is no page canvas, no annotation UI and no page rasterization. It
+is the tool you reach for when a PDF is data you need to inspect, split, combine,
+label or read.
+
+## 🚀 Getting started
+
+### 1. Agent / prompt (recommended)
+
+Give your coding agent the task and the package name; it can install the CLI and
+run the operations for you.
+
+```text
+Install @wae/open-pdf in this project. Inspect every PDF in ./in, merge them into
+./out/combined.pdf in filename order, add an outline entry for each source file,
+then split the result every 10 pages into ./out/chunks/.
+```
+
+Then confirm what the installed build supports:
 
 ```bash
-# Read version, pages, metadata, page sizes and outlines
-open-pdf inspect input.pdf
-
-# Merge files in argument order
-open-pdf merge cover.pdf chapter-1.pdf chapter-2.pdf -o combined.pdf
-
-# Split into page-range files: input-p1-5.pdf, input-p10.pdf, ...
-open-pdf split input.pdf --ranges 1-5,10 --out-dir pages/
-
-# Split into consecutive files of at most 2 pages: input-p1-2.pdf, input-p3-4.pdf, ...
-open-pdf split input.pdf --every 2 --out-dir chunks/
-
-# Create two styled pages; | separates lines inside one page
-open-pdf create --out notes.pdf --title "Meeting notes" \
-  --page "Agenda|1. Budget|2. Timeline" \
-  --page "Decisions" \
-  --page-size a4 --font times --font-size 14 --margin 56 \
-  --align center --author "Ada" --page-numbers
-
-# Reorder, drop and rotate pages
-open-pdf arrange input.pdf -o arranged.pdf --order 3,1,2 --remove 4 --rotate 90
-
-# Delete pages and keep the rest in order
-open-pdf delete-pages input.pdf --pages 2,5-7 -o kept.pdf
-
-# Keep only pages 1-3 and 5, in source order
-open-pdf extract-pages input.pdf --pages 1-3,5 -o excerpt.pdf
-
-# Rotate only pages 1-3 clockwise by 90 degrees
-open-pdf rotate input.pdf --pages 1-3 --degrees 90 -o rotated.pdf
-
-# Set a CropBox on page 1: left,bottom,right,top in points
-open-pdf set-page-boxes input.pdf --pages 1 --box 10,20,300,400 -o cropped.pdf
-
-# Rewrite metadata
-open-pdf set-metadata input.pdf -o tagged.pdf --title "Final" --author "Ada"
-
-# Watermark every page, or only pages 1-3
-open-pdf stamp input.pdf -o draft.pdf --text "DRAFT {page}/{pages}" \
-  --position center --rotation 45 --opacity 0.25 --color "#CC0000"
-open-pdf stamp input.pdf -o footer.pdf --text "Internal" --position bottom --pages 1-3
-
-# Extract text and list extraction losses
-open-pdf extract-text notes.pdf
-
-# Extract embedded images as JPG/PNG into a directory
-open-pdf extract-images notes.pdf -o images/
-
-# Work on bytes instead of a path: pipe a PDF into any reader
-cat input.pdf | open-pdf inspect --stdin
-cat input.pdf | open-pdf extract-text --stdin
-cat input.pdf | open-pdf extract-images --stdin --name report -o images/
+npx open-pdf capabilities
 ```
 
-The same operations are available through the session SDK. The session is the
-product; the CLI is a thin consumer of it:
+### 2. Manual install
 
-```ts
-import { OpenPDF } from '@wae/open-pdf';
+Requires Node.js 18 or newer.
 
-const pdf = new OpenPDF({ locale: 'zh-CN', overwrite: true });
-
-const info = await pdf.inspect('input.pdf');
-console.log(info.version, info.pages, info.metadata.title);
-
-await pdf.merge(['a.pdf', 'b.pdf'], 'combined.pdf', { title: 'Combined' });
-await pdf.split('combined.pdf', '1-2,3', 'pages');
-await pdf.splitEvery('combined.pdf', 2, 'chunks');
-await pdf.keepPages('combined.pdf', '1-3,5', 'excerpt.pdf');
-await pdf.create({ out: 'hello.pdf', title: 'Hello', pages: ['line one\nline two'] });
-await pdf.create({
-  out: 'styled.pdf',
-  title: 'Styled',
-  pages: ['Centered body text'],
-  pageSize: 'a4',
-  font: 'times',
-  fontSize: 16,
-  marginPt: 56,
-  align: 'center',
-  pageNumbers: true,
-});
-
-const stamped = await pdf.stamp('styled.pdf', 'draft.pdf', {
-  text: 'DRAFT {page}/{pages}',
-  position: 'center',
-  rotation: 45,
-  opacity: 0.25,
-  color: '#CC0000',
-});
-console.log(stamped.pagesStamped);
-
-const text = await pdf.extractText('hello.pdf');
-console.log(text.markdown, text.losses);
-
-const images = await pdf.extractImages('hello.pdf', 'images');
-console.log(images);
-
-// Same readers over bytes the caller already owns
-const bytes = await readFile('hello.pdf');
-const piped = await pdf.inspectBytes(bytes);
-const pipedText = await pdf.extractTextBytes(bytes);
-const pipedImages = await pdf.extractImagesBytes(bytes, 'images', 'hello');
-console.log(piped.pages, pipedText.losses.length, pipedImages.length);
+```bash
+npm install @wae/open-pdf
+npx open-pdf inspect input.pdf
+npx open-pdf merge part-1.pdf part-2.pdf -o combined.pdf
 ```
 
-`OpenPDF.capabilities(...)` and the other synchronous static methods stay as
-compatibility wrappers for callers that do not keep a session.
+The [package README](./projects/packages/open-pdf/README.md) shows the same
+operations through the SDK, and the [agent reference](./documentation/agents.md)
+lists every command, flag and report shape.
 
-`open-pdf capabilities` prints the honest support matrix, including what is
-partial and what is not supported at all.
+## ✨ Highlights
 
-## 🧩 How it works
+- **Page-level editing, not re-rendering.** Merge, split, keep or delete ranges,
+  reorder, rotate and crop existing pages; page content and resources are copied,
+  not rasterized.
+- **Inspect what is really there.** Version, page count and geometry, document
+  metadata, bookmarks and AcroForm fields, including files that use
+  cross-reference streams and object streams.
+- **Text and image extraction.** Decode Flate, LZW, ASCIIHex, ASCII85 and
+  RunLength streams for text; write embedded JPEGs unchanged and encode 8-bit
+  gray or RGB images as PNG. Every skipped part is reported.
+- **Metadata and outlines.** Rewrite title, author, subject, keywords, creator
+  and producer, replace the outline tree, and fill form values while copying
+  every page.
+- **Text stamps.** Paint a watermark, header or footer on every page or a page
+  range, with font, size, rotation, opacity and colour; `{page}` and `{pages}`
+  are substituted per page.
+- **Create from text.** Paper size, base-14 fonts, margins, alignment, automatic
+  wrapping, pagination and optional `page / total` footers.
+- **Pipes and bytes.** Readers accept standard input and in-memory PDF bytes, so
+  a document from another process needs no temporary file.
+- **Honest failures.** Unsupported requests and skipped decodes carry stable
+  codes instead of silently producing a damaged document.
 
-```mermaid
-flowchart LR
-    A[PDF files] --> B[Parser<br/>classic xref, xref streams, object streams]
-    B --> C{Operation}
-    C -->|inspect| D[Metadata, geometry and outline report]
-    C -->|merge / split| E[Page copier<br/>shared resources deduplicated]
-    C -->|create| F[Text page composer]
-    E --> G[Standard PDF 1.7 writer]
-    F --> G
-    B --> H[Filter decoder<br/>Flate, LZW, ASCIIHex, ASCII85, RunLength]
-    H --> I[Text extraction]
-    H --> J[Image extraction<br/>JPEG passthrough and PNG encoding]
-```
+## 📊 How OpenPDF compares
 
-## 🧱 What it does NOT do
+| | OpenPDF | Desktop PDF suites | Browser PDF editors |
+|---|---|---|---|
+| Runs in a script, CLI or agent | Yes | Limited | No |
+| Page-level edits without re-rendering | Yes | Varies | Varies |
+| Metadata, outlines and form fields as data | Yes | Through the UI | Through the UI |
+| Create, stamp and fill forms programmatically | Yes | GUI-first | GUI-first |
+| Render pages to an image | No | Yes | Yes |
+| Open encrypted PDFs | No | Yes | Sometimes |
 
-- **No encrypted PDFs** — files with `/Encrypt`, in a classic trailer or an
-  xref stream, are rejected and never decrypted.
-- **No image codecs** — `/DCTDecode` is copied as a JPEG only when its payload
-  already starts with the SOI marker; `/JBIG2Decode`, `/CCITTFaxDecode` and
-  `/JPXDecode` are reported as losses. PNG output covers 8-bit DeviceGray and
-  DeviceRGB only.
-- **No rendering or rasterization** — no page preview, SVG or print output; PNG
-  files are re-encoded embedded images, not rendered pages.
-- **No repair of incremental updates beyond a linear scan** — malformed or
-  truncated input returns a stable error code instead of a best-effort document.
-- **No form filling, JavaScript or digital signatures** — AcroForm fields are
-  read for inspection only.
-- **No font embedding** — created documents select among the base-14 fonts
-  (Helvetica, Times, Courier and their bold variants) with WinAnsi-compatible
-  text; custom TrueType embedding is not implemented.
+## 🧪 Examples
+
+Each task maps to one command. Replace the sample names with your own files.
+
+| Task | Command |
+|---|---|
+| Inspect a document | `open-pdf inspect input.pdf` |
+| Merge in argument order | `open-pdf merge part-1.pdf part-2.pdf -o combined.pdf` |
+| Split by page ranges | `open-pdf split combined.pdf --ranges 1-5,10 --out-dir pages/` |
+| Split every N pages | `open-pdf split combined.pdf --every 10 --out-dir pages/` |
+| Keep only selected pages | `open-pdf extract-pages combined.pdf --pages 1-3,5 -o excerpt.pdf` |
+| Delete selected pages | `open-pdf delete-pages combined.pdf --pages 2,7-9 -o trimmed.pdf` |
+| Reorder, remove and rotate | `open-pdf arrange combined.pdf -o ordered.pdf --order 3,1,2 --remove 4 --rotate 90` |
+| Rotate selected pages | `open-pdf rotate combined.pdf --pages 1-2 --degrees 180 -o rotated.pdf` |
+| Set a CropBox | `open-pdf set-page-boxes combined.pdf --pages 1 --box 18,36,594,756 -o cropped.pdf` |
+| Rewrite metadata | `open-pdf set-metadata combined.pdf -o tagged.pdf --title "Quarterly report"` |
+| Replace the outline | `open-pdf bookmarks combined.pdf -o outlined.pdf --bookmark "Intro:1" --bookmark "Results:3"` |
+| Fill form fields | `open-pdf fill-form form.pdf -o filled.pdf --set "name=Ada" --set "approved=true"` |
+| Create a document | `open-pdf create -o notes.pdf --title "Notes" --page "Line one\|Line two"` |
+| Stamp every page | `open-pdf stamp combined.pdf -o draft.pdf --text "DRAFT {page}/{pages}" --position center` |
+| Extract text | `open-pdf extract-text combined.pdf` |
+| Extract images | `open-pdf extract-images combined.pdf -o images/` |
+| Read from standard input | `cat input.pdf \| open-pdf inspect --stdin` |
+
+More detail: [package README](./projects/packages/open-pdf/README.md) ·
+[agent reference](./documentation/agents.md).
+
+## 📜 License
+
+Mozilla Public License 2.0. See [License.md](./License.md).

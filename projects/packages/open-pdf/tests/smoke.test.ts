@@ -12,9 +12,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { OpenPDF, OpenPdfError, documentFormats, errorCodes, formatFromPath, formatInfo, isPdfPath } from './index.js';
-import { nativeBinding } from './native.js';
-import { expandPageList, formatPageList } from './service.js';
+import { OpenPDF, OpenPdfError, documentFormats, errorCodes, formatFromPath, formatInfo, isPdfPath } from '../src/index.js';
+import { nativeBinding } from '../src/native.js';
+import { expandPageList, formatPageList } from '../src/service.js';
 
 const installed = (() => {
     try {

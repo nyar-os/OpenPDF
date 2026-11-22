@@ -1,0 +1,16 @@
+{
+    "name": "@wae/open-pdf-darwin-arm64",
+    "version": "0.0.0",
+    "description": "macOS arm64 native addon for @wae/open-pdf",
+    "license": "MPL-2.0",
+    "os": ["darwin"],
+    "cpu": ["arm64"],
+    "main": "open-pdf.darwin-arm64.node",
+    "files": ["open-pdf.darwin-arm64.node", "README.md", "License.md"],
+    "engines": { "node": ">=18" },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nyar-os/OpenPDF.git",
+        "directory": "projects/packages/open-pdf-darwin-arm64"
+    }
+}
