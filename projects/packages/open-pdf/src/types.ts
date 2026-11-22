@@ -31,7 +31,19 @@ export interface PdfPageSize {
 /** One outline entry. */
 export interface PdfBookmark {
     readonly title: string;
+    /** Nesting level, where top-level entries are `1`. */
     readonly depth: number;
+}
+
+/** Result of `outline()`. */
+export interface PdfOutlineReport {
+    readonly path: string;
+    readonly pages: number;
+    /** Number of outline entries. */
+    readonly count: number;
+    /** Deepest nesting level, `0` when the document has no outline. */
+    readonly maxDepth: number;
+    readonly bookmarks: readonly PdfBookmark[];
 }
 
 /** One terminal AcroForm field. */
@@ -99,6 +111,7 @@ export interface PdfCapabilities {
     };
     readonly operations: {
         readonly inspect: SupportLevel;
+        readonly outline: SupportLevel;
         readonly create: SupportLevel;
         readonly merge: SupportLevel;
         readonly split: SupportLevel;

@@ -146,6 +146,24 @@ fn search_report(
     Ok(outcome)
 }
 
+/// Reads the outline tree of one PDF without rendering or rewriting it.
+///
+/// Entries keep document order and report a one-based `depth`, so top-level
+/// bookmarks are `1`. `count` is the number of entries and `maxDepth` the
+/// deepest level, both zero when the document has no outline.
+pub fn outline(path: &Path) -> Result<Value, ServiceError> {
+    let report = inspect(path)?;
+    let max_depth = report.bookmarks.iter().map(|bookmark| bookmark.depth).max().unwrap_or(0);
+    let count = report.bookmarks.len();
+    Ok(json!({
+        "path": path.display().to_string(),
+        "pages": report.pages,
+        "count": count,
+        "maxDepth": max_depth,
+        "bookmarks": report.bookmarks,
+    }))
+}
+
 /// Extracts images from the selected one-based pages into `out_dir`.
 ///
 /// `ranges` accepts comma-separated pages and inclusive ranges such as
@@ -286,6 +304,7 @@ pub fn capabilities() -> serde_json::Value {
         },
         "operations": {
             "inspect": "supported",
+            "outline": "supported",
             "create": "supported",
             "merge": "supported",
             "split": "supported",

@@ -29,6 +29,7 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    PdfOutlineReport,
     PdfSearchReport,
     RotatePagesReport,
     SetMetadataReport,
@@ -84,6 +85,11 @@ export function capabilities(): PdfCapabilities {
 /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
 export function inspect(path: string): PdfInspectReport {
     return decode<PdfInspectReport>(() => binding('inspect').pdf_inspect(path));
+}
+
+/** Reads the outline tree of one PDF without rendering or rewriting it. */
+export function outline(path: string): PdfOutlineReport {
+    return decode<PdfOutlineReport>(() => binding('outline').pdf_outline(path));
 }
 
 /** Concatenates PDF files in the given order. */

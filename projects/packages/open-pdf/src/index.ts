@@ -29,6 +29,7 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    PdfOutlineReport,
     PdfSearchReport,
     RotatePagesReport,
     SetMetadataReport,
@@ -71,6 +72,11 @@ export class OpenPDF {
     /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
     async inspect(path: string): Promise<PdfInspectReport> {
         return service.inspect(path);
+    }
+
+    /** Reads the outline tree of one PDF with entry counts and nesting depth. */
+    async outline(path: string): Promise<PdfOutlineReport> {
+        return service.outline(path);
     }
 
     /** Concatenates PDF files in the given order. */
@@ -215,6 +221,11 @@ export class OpenPDF {
     /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
     static inspect(path: string): PdfInspectReport {
         return service.inspect(path);
+    }
+
+    /** Reads the outline tree of one PDF with entry counts and nesting depth. */
+    static outline(path: string): PdfOutlineReport {
+        return service.outline(path);
     }
 
     /** Concatenates PDF files in the given order. */

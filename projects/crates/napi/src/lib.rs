@@ -73,6 +73,13 @@ fn pdf_inspect(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::inspect(std::path::Path::new(&path)).map_err(failure)?)
 }
 
+/// Reads the outline tree of one PDF file.
+#[function]
+fn pdf_outline(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    respond(&ctx, &open_pdf_core::outline(std::path::Path::new(&path)).map_err(failure)?)
+}
+
 /// Merges PDF files in the given order.
 #[function]
 fn pdf_merge(ctx: CallContext) -> Result<JsValue> {
@@ -343,6 +350,7 @@ register_module![
     version,
     capabilities,
     pdf_inspect,
+    pdf_outline,
     pdf_merge,
     pdf_split,
     pdf_split_every,

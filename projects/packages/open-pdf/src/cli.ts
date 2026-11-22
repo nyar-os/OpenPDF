@@ -214,6 +214,25 @@ cli
     });
 
 cli
+    .command('outline', 'cli.cmd.outline')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        const report = await pdf.outline(file);
+        const human = report.count === 0
+            ? `${report.path} pages=${report.pages} (no outline)`
+            : [
+                  `${report.path} pages=${report.pages} entries=${report.count} maxDepth=${report.maxDepth}`,
+                  ...report.bookmarks.map((bookmark) => `${'  '.repeat(Math.max(0, bookmark.depth - 1))}${bookmark.title}`),
+              ].join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
+cli
     .command('merge', 'cli.cmd.merge')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--title <title>', 'cli.opt.title')

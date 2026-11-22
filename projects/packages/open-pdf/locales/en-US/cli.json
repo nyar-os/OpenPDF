@@ -4,6 +4,7 @@
         "cmd": {
             "capabilities": "Print what this build supports, honestly",
             "inspect": "Show version, pages, metadata, page sizes and outlines",
+            "outline": "Print the outline tree with entry count and nesting depth",
             "merge": "Concatenate PDF files in argument order",
             "split": "Write one file per page range or per N pages",
             "arrange": "Reorder, remove and rotate pages into a new PDF",

@@ -56,6 +56,7 @@ test('without an installed addon every engine call reports capability/not-implem
     const calls: (() => unknown)[] = [
         () => OpenPDF.capabilities(),
         () => OpenPDF.inspect('input.pdf'),
+        () => OpenPDF.outline('input.pdf'),
         () => OpenPDF.merge(['a.pdf', 'b.pdf'], 'out.pdf'),
         () => OpenPDF.split('input.pdf', '1-2', 'out'),
         () => OpenPDF.splitEvery('input.pdf', 2, 'out'),

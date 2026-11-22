@@ -7,7 +7,7 @@ use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
-    merge, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
+    merge, outline, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
 use serde_json::json;
 
@@ -1194,6 +1194,44 @@ fn set_bookmarks_writes_a_readable_outline_tree() {
     let extracted = extract_text(&out).expect("extract outlined");
     assert!(extracted.markdown.contains("One"), "{:?}", extracted.markdown);
     assert!(extracted.markdown.contains("Two"), "{:?}", extracted.markdown);
+}
+
+#[test]
+fn outline_reports_entries_counts_and_nesting_depth() {
+    let workspace = Workspace::new();
+    let path = workspace.create("source.pdf", None, &["One", "Two"]);
+    let out = workspace.path("outline-tree.pdf");
+
+    set_bookmarks(
+        &path,
+        &out,
+        &[
+            Bookmark { title: "Intro".to_string(), page: 1, depth: None },
+            Bookmark { title: "Details".to_string(), page: 2, depth: Some(1) },
+            Bookmark { title: "End".to_string(), page: 2, depth: Some(0) },
+        ],
+    )
+    .expect("set bookmarks");
+
+    let report = outline(&out).expect("read outline");
+    assert_eq!(report["path"].as_str(), Some(out.display().to_string().as_str()));
+    assert_eq!(report["pages"].as_u64(), Some(2));
+    assert_eq!(report["count"].as_u64(), Some(3));
+    assert_eq!(report["maxDepth"].as_u64(), Some(2));
+    let bookmarks = report["bookmarks"].as_array().expect("bookmark list");
+    let entries: Vec<(&str, u64)> = bookmarks
+        .iter()
+        .map(|bookmark| {
+            (bookmark["title"].as_str().expect("title"), bookmark["depth"].as_u64().expect("depth"))
+        })
+        .collect();
+    assert_eq!(entries, [("Intro", 1), ("Details", 2), ("End", 1)]);
+
+    let empty = workspace.create("plain.pdf", None, &["Plain"]);
+    let plain = outline(&empty).expect("read empty outline");
+    assert_eq!(plain["count"].as_u64(), Some(0));
+    assert_eq!(plain["maxDepth"].as_u64(), Some(0));
+    assert_eq!(plain["bookmarks"].as_array().map(Vec::len), Some(0));
 }
 
 #[test]

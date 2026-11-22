@@ -25,6 +25,7 @@ Use `open-pdf <command> --help` for the localized help text of one command.
 ```text
 open-pdf capabilities
 open-pdf inspect <file> | --stdin
+open-pdf outline <file>
 open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
 open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count>)
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
@@ -103,6 +104,7 @@ Report shapes:
 |---|---|
 | `capabilities` | `{ engine, formats, operations, checks, renderers }` |
 | `inspect` | `{ label, version, pages, encrypted, metadata, pageSizes, bookmarks, formFields, warnings }` |
+| `outline` | `{ path, pages, count, maxDepth, bookmarks: [{ title, depth }] }` |
 | `merge` | `{ path, pages, bytes }` |
 | `split` | `{ documents: [{ path, pages }] }` |
 | `arrange` | `{ path, pages }` |
@@ -124,7 +126,9 @@ Nested values:
 - `metadata`: `title`, `author`, `subject`, `keywords`, `creator`, `producer`,
   `creationDate`, `modDate`; each is a string or `null`.
 - `pageSizes[]`: `{ widthPt, heightPt, rotation }`.
-- `bookmarks[]` from `inspect`: `{ title, depth }`.
+- `bookmarks[]` from `inspect` and `outline`: `{ title, depth }`, where `depth`
+  is one-based and top-level entries are `1`. `outline` also reports `count`
+  and `maxDepth` (`0` for a document without an outline).
 - `formFields[]`: `{ name, type, value, readOnly, required }`, where `name` is
   the fully qualified `/T` chain and `type` is `Tx`, `Btn`, `Ch`, `Sig` or
   `null`.
