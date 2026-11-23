@@ -16,6 +16,7 @@
             "insert-blank-pages": "Insert blank pages after a selected page",
             "replace-pages": "Replace the selected pages with pages of another PDF",
             "reverse-pages": "Reverse the page order into a new PDF",
+            "move-pages": "Move the selected pages after one anchor page",
             "extract-pages": "Keep only the selected pages, in source order, in a new PDF",
             "rotate": "Add a clockwise rotation to the selected pages",
             "set-page-boxes": "Write a CropBox on the selected pages",

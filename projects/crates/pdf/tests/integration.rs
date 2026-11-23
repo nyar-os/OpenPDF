@@ -10,7 +10,8 @@ use open_pdf_core::{
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_blank_pages, insert_pages,
-    merge, merge_selected, metadata, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks,
+    merge, merge_selected, metadata, move_pages, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages,
+    set_bookmarks,
     set_metadata,
     split_parts,
     set_page_boxes, split, stamp,
@@ -1154,6 +1155,34 @@ fn reverse_pages_flips_the_document_order() {
     assert!(three < two && two < one, "unexpected order: {text}");
 
     assert_invalid(reverse_pages(&path, &out, false), "io/exists");
+}
+
+#[test]
+fn move_pages_relocates_a_selection_after_one_anchor() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three", "Four"]);
+    let out = workspace.path("moved.pdf");
+
+    let report = move_pages(&path, "1", 3, &out, false).expect("move the first page after the third");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["sourcePages"], json!(4));
+    assert_eq!(report["moved"], json!([1]));
+    assert_eq!(report["after"], json!(3));
+    let text = extract_text(&out).expect("extract moved").markdown;
+    let positions = ["One", "Two", "Three", "Four"].map(|page| text.find(page).expect(page));
+    let [one, two, three, four] = positions;
+    assert!(two < three && three < one && one < four, "unexpected order: {text}");
+
+    let front = workspace.path("front.pdf");
+    move_pages(&path, "3-4", 0, &front, false).expect("move the tail to the front");
+    let text = extract_text(&front).expect("extract front").markdown;
+    let positions = ["One", "Two", "Three", "Four"].map(|page| text.find(page).expect(page));
+    let [one, two, three, four] = positions;
+    assert!(three < four && four < one && one < two, "unexpected order: {text}");
+
+    assert_invalid(move_pages(&path, "2", 9, &workspace.path("bad.pdf"), true), "session/argument-invalid");
+    assert_invalid(move_pages(&path, "2-3", 2, &workspace.path("bad-anchor.pdf"), true), "session/argument-invalid");
+    assert_invalid(move_pages(&path, "1", 3, &out, false), "io/exists");
 }
 
 #[test]

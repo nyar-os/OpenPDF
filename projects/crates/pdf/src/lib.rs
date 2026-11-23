@@ -721,6 +721,52 @@ pub fn reverse_pages(path: &Path, out: &Path, overwrite: bool) -> Result<serde_j
     }))
 }
 
+/// Moves the selected pages so they follow one anchor page.
+///
+/// The pages keep their relative order and every other page keeps its original
+/// order. `after` is a one-based page that must stay put, or `0` to move the
+/// selection to the front; an anchor inside the selection is refused because
+/// its position is being moved. The output is replaced when it already exists
+/// only if `overwrite` is true.
+pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: bool) -> Result<serde_json::Value, ServiceError> {
+    let total = document_pdf::inspect(path)?.pages;
+    let selected = parse_page_ranges(pages, total)?;
+    if after as usize > total {
+        return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
+    }
+    if after != 0 && selected.contains(&(after as usize)) {
+        return Err(invalid_pages(format!("page {after} is part of the selection being moved")));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    let mut order: Vec<usize> = (1..=total).filter(|page| !selected.contains(page)).collect();
+    let position = if after == 0 {
+        0
+    }
+    else {
+        let anchor = after as usize;
+        order
+            .iter()
+            .position(|page| *page == anchor)
+            .map(|index| index + 1)
+            .ok_or_else(|| invalid_pages(format!("page {after} is outside the {total}-page document")))?
+    };
+    order.splice(position..position, selected.iter().copied());
+    let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
+    let arranged = document_pdf::arrange(path, out, &request)?;
+    Ok(json!({
+        "path": arranged.path,
+        "pages": arranged.pages,
+        "sourcePages": total,
+        "moved": selected,
+        "after": after,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -778,6 +824,7 @@ pub fn capabilities() -> serde_json::Value {
             "split": "supported",
             "splitParts": "supported",
             "arrange": "supported",
+            "movePages": "supported",
             "deletePages": "supported",
             "duplicatePages": "supported",
             "insertPages": "supported",

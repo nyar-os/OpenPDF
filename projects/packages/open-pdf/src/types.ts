@@ -124,6 +124,7 @@ export interface PdfCapabilities {
         readonly split: SupportLevel;
         readonly splitParts: SupportLevel;
         readonly arrange: SupportLevel;
+        readonly movePages: SupportLevel;
         readonly deletePages: SupportLevel;
         readonly duplicatePages: SupportLevel;
         readonly insertPages: SupportLevel;
@@ -282,6 +283,19 @@ export interface ReplacePagesReport {
     readonly selectedPages: readonly number[];
     /** The replacement document. */
     readonly insert: string;
+}
+
+/** Result of `movePages()`. */
+export interface MovePagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the source document. */
+    readonly sourcePages: number;
+    /** One-based pages moved, in the order they now appear. */
+    readonly moved: readonly number[];
+    /** Anchor page the selection follows; `0` means the front. */
+    readonly after: number;
 }
 
 /** Result of `reversePages()`. */

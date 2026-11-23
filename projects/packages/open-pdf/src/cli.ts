@@ -634,6 +634,44 @@ cli
     });
 
 cli
+    .command('move-pages', 'cli.cmd.move-pages')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('--after <page>', 'cli.opt.after')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options, 'pages');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        const afterText = text(options, 'after');
+        const after = afterText === undefined ? Number.NaN : Number(afterText);
+        if (!Number.isSafeInteger(after) || after < 0) {
+            ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
+            return 2;
+        }
+        const report = await pdf.movePages(file, pages, after, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `moved ${report.path} pages=${report.pages} after=${report.after} moved=${report.moved.join(',')}`,
+        );
+        return 0;
+    });
+
+cli
     .command('extract-pages', 'cli.cmd.extract-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')

@@ -80,6 +80,22 @@ fn pdf_outline(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::outline(std::path::Path::new(&path)).map_err(failure)?)
 }
 
+/// Moves selected pages after one anchor page.
+#[function]
+fn pdf_move_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let after = argument(&ctx, 2)?.as_i64()?;
+    let after =
+        u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
+    let out = text(&ctx, 3)?;
+    let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report =
+        open_pdf_core::move_pages(std::path::Path::new(&path), &pages, after, std::path::Path::new(&out), overwrite)
+            .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Reads the document information dictionary of one PDF.
 #[function]
 fn pdf_metadata(ctx: CallContext) -> Result<JsValue> {
@@ -533,6 +549,7 @@ register_module![
     pdf_insert_blank_pages,
     pdf_replace_pages,
     pdf_reverse_pages,
+    pdf_move_pages,
     pdf_rotate_pages,
     pdf_set_page_boxes,
     pdf_set_metadata,

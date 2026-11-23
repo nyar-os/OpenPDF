@@ -30,6 +30,7 @@ import type {
     MergeOptions,
     MergeReport,
     MetadataPatch,
+    MovePagesReport,
     PdfCapabilities,
     PdfInspectReport,
     PdfMetadataReport,
@@ -177,6 +178,16 @@ export class OpenPDF {
     }
 
     /** Reverses the page order into a new PDF. */
+    /** Moves the selected pages after the anchor page, or the front with `after = 0`. */
+    async movePages(
+        path: string,
+        pages: string,
+        after: number,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<MovePagesReport> {
+        return service.movePages(path, pages, after, out, overwrite);
+    }
     async reversePages(path: string, out: string, overwrite = this.defaultOverwrite): Promise<ReversePagesReport> {
         return service.reversePages(path, out, overwrite);
     }
@@ -411,6 +422,10 @@ export class OpenPDF {
     }
 
     /** Reverses the page order into a new PDF. */
+    /** Moves the selected pages after the anchor page, or the front with `after = 0`. */
+    static movePages(path: string, pages: string, after: number, out: string, overwrite = false): MovePagesReport {
+        return service.movePages(path, pages, after, out, overwrite);
+    }
     static reversePages(path: string, out: string, overwrite = false): ReversePagesReport {
         return service.reversePages(path, out, overwrite);
     }

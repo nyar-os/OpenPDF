@@ -37,6 +37,7 @@ open-pdf insert-pages <file> --insert <file> --after <page> [--pages <ranges>] -
 open-pdf insert-blank-pages <file> --after <page> [--count <count>] [--size <size>] -o <out> [--overwrite]
 open-pdf replace-pages <file> --pages <list> --insert <file> [--source-pages <ranges>] -o <out> [--overwrite]
 open-pdf reverse-pages <file> -o <out> [--overwrite]
+open-pdf move-pages <file> --pages <list> --after <page> -o <out> [--overwrite]
 open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
 open-pdf set-page-boxes <file> --pages <list> --box <l,b,r,t> -o <out> [--overwrite]
@@ -123,6 +124,9 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   page, so the page count changes by `replacementPages - removed`.
 - `--order` and `--remove` are comma-separated page numbers. When both are
   given, removal runs first and `--order` must list every surviving page once.
+- `--pages` on `move-pages` is a 1-based range list and `--after` names the
+  one-based page the selection follows; `0` moves it to the front and an anchor
+  inside the selection is rejected. Moved pages keep their relative order.
 - `--rotate` on `arrange` and `--degrees` on `rotate` are clockwise and must be
   `90`, `180` or `270`. The CLI rejects other degrees on `rotate`; pass only
   supported values to `arrange`.
@@ -189,6 +193,7 @@ Report shapes:
 | `insert-blank-pages` | `{ path, pages, sourcePages, insertedPages, after }` |
 | `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, sourceInsertPages, selectedPages, insert }` |
 | `reverse-pages` | `{ path, pages, sourcePages }` |
+| `move-pages` | `{ path, pages, sourcePages, moved, after }` |
 | `extract-pages` | `{ path, pages, kept, removed, bytes }` |
 | `rotate` | `{ path, pages, rotated, bytes }` |
 | `set-page-boxes` | `{ path, pages, cropped, bytes }` |

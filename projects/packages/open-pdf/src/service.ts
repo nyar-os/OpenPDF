@@ -30,6 +30,7 @@ import type {
     MergeOptions,
     MergeReport,
     MetadataPatch,
+    MovePagesReport,
     PdfCapabilities,
     PdfInspectReport,
     PdfMetadataReport,
@@ -236,6 +237,11 @@ export function replacePages(
 }
 
 /** Reverses the page order of `path` into a new PDF. */
+/** Moves the selected pages so they follow the anchor page, or the front with `after = 0`. */
+export function movePages(path: string, pages: string, after: number, out: string, overwrite = false): MovePagesReport {
+    return decode<MovePagesReport>(() => binding('movePages').pdf_move_pages(path, pages, after, out, overwrite));
+}
+
 export function reversePages(path: string, out: string, overwrite = false): ReversePagesReport {
     return decode<ReversePagesReport>(() => binding('reversePages').pdf_reverse_pages(path, out, overwrite));
 }
