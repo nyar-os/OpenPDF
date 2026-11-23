@@ -46,6 +46,13 @@ export interface PdfOutlineReport {
     readonly bookmarks: readonly PdfBookmark[];
 }
 
+/** Result of `metadata()`. */
+export interface PdfMetadataReport {
+    readonly path: string;
+    readonly pages: number;
+    readonly metadata: PdfMetadata;
+}
+
 /** One terminal AcroForm field. */
 export interface FormField {
     /** Fully qualified name built from the `/T` chain, such as `person.name`. */
@@ -123,6 +130,7 @@ export interface PdfCapabilities {
         readonly reversePages: SupportLevel;
         readonly rotatePages: SupportLevel;
         readonly setPageBoxes: SupportLevel;
+        readonly metadata: SupportLevel;
         readonly setMetadata: SupportLevel;
         readonly setBookmarks: SupportLevel;
         readonly fillForm: SupportLevel;

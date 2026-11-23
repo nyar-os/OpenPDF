@@ -272,6 +272,31 @@ cli
     });
 
 cli
+    .command('metadata', 'cli.cmd.metadata')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        const report = await pdf.metadata(file);
+        const metadata = report.metadata;
+        const human = [
+            `${report.path} pages=${report.pages}`,
+            `title: ${metadata.title ?? '(none)'}`,
+            `author: ${metadata.author ?? '(none)'}`,
+            `subject: ${metadata.subject ?? '(none)'}`,
+            `keywords: ${metadata.keywords ?? '(none)'}`,
+            `creator: ${metadata.creator ?? '(none)'}`,
+            `producer: ${metadata.producer ?? '(none)'}`,
+            `creationDate: ${metadata.creationDate ?? '(none)'}`,
+            `modDate: ${metadata.modDate ?? '(none)'}`,
+        ].join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
+cli
     .command('merge', 'cli.cmd.merge')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--title <title>', 'cli.opt.title')

@@ -213,6 +213,19 @@ pub fn outline(path: &Path) -> Result<Value, ServiceError> {
     }))
 }
 
+/// Reads the document information dictionary of one PDF without rewriting it.
+///
+/// The report carries the page count and the metadata fields; each field is a
+/// string or `null` when the document omits it.
+pub fn metadata(path: &Path) -> Result<Value, ServiceError> {
+    let report = inspect(path)?;
+    Ok(json!({
+        "path": path.display().to_string(),
+        "pages": report.pages,
+        "metadata": report.metadata,
+    }))
+}
+
 /// Extracts images from the selected one-based pages into `out_dir`.
 ///
 /// `ranges` accepts comma-separated pages and inclusive ranges such as
@@ -553,6 +566,7 @@ pub fn capabilities() -> serde_json::Value {
             "reversePages": "supported",
             "rotatePages": "supported",
             "setPageBoxes": "supported",
+            "metadata": "supported",
             "setMetadata": "supported",
             "setBookmarks": "supported",
             "fillForm": "supported",

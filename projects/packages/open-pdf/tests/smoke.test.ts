@@ -57,6 +57,7 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.capabilities(),
         () => OpenPDF.inspect('input.pdf'),
         () => OpenPDF.outline('input.pdf'),
+        () => OpenPDF.metadata('input.pdf'),
         () => OpenPDF.merge(['a.pdf', 'b.pdf'], 'out.pdf'),
         () => OpenPDF.split('input.pdf', '1-2', 'out'),
         () => OpenPDF.splitEvery('input.pdf', 2, 'out'),
@@ -162,6 +163,20 @@ test('reversePages flips the page order', { skip: withoutAddon }, async () => {
         assert.equal(report.sourcePages, 2);
         const text = OpenPDF.extractText(out).markdown;
         assert.ok(text.indexOf('Two') < text.indexOf('One'), text);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('metadata reads the information dictionary', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        await OpenPDF.create({ out: source, pages: ['One'], title: 'Quarterly deck', overwrite: true });
+        const report = OpenPDF.metadata(source);
+        assert.equal(report.pages, 1);
+        assert.equal(report.metadata.title, 'Quarterly deck');
+        assert.equal(report.metadata.producer, 'OpenPDF');
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

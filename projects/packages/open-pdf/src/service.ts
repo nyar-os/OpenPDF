@@ -31,6 +31,7 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    PdfMetadataReport,
     PdfOutlineReport,
     PdfSearchReport,
     ReplacePagesReport,
@@ -94,6 +95,11 @@ export function inspect(path: string): PdfInspectReport {
 /** Reads the outline tree of one PDF without rendering or rewriting it. */
 export function outline(path: string): PdfOutlineReport {
     return decode<PdfOutlineReport>(() => binding('outline').pdf_outline(path));
+}
+
+/** Reads the document information dictionary of one PDF. */
+export function metadata(path: string): PdfMetadataReport {
+    return decode<PdfMetadataReport>(() => binding('metadata').pdf_metadata(path));
 }
 
 /** Concatenates PDF files in the given order. */

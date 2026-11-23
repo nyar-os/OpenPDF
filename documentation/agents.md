@@ -27,6 +27,7 @@ open-pdf capabilities
 open-pdf open <file> [--print]
 open-pdf inspect <file> | --stdin
 open-pdf outline <file> [--depth <n>]
+open-pdf metadata <file>
 open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
 open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count>)
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
@@ -163,6 +164,7 @@ Report shapes:
 | `capabilities` | `{ engine, formats, operations, checks, renderers }` |
 | `inspect` | `{ label, version, pages, encrypted, metadata, pageSizes, bookmarks, formFields, warnings }` |
 | `outline` | `{ path, pages, count, maxDepth, bookmarks: [{ title, depth }] }` |
+| `metadata` | `{ path, pages, metadata }` |
 | `merge` | `{ path, pages, bytes }` |
 | `split` | `{ documents: [{ path, pages }] }` |
 | `arrange` | `{ path, pages }` |

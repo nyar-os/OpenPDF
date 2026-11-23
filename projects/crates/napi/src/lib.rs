@@ -80,6 +80,14 @@ fn pdf_outline(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &open_pdf_core::outline(std::path::Path::new(&path)).map_err(failure)?)
 }
 
+/// Reads the document information dictionary of one PDF.
+#[function]
+fn pdf_metadata(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let report = open_pdf_core::metadata(std::path::Path::new(&path)).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Merges PDF files in the given order.
 #[function]
 fn pdf_merge(ctx: CallContext) -> Result<JsValue> {
@@ -449,6 +457,7 @@ register_module![
     capabilities,
     pdf_inspect,
     pdf_outline,
+    pdf_metadata,
     pdf_merge,
     pdf_split,
     pdf_split_every,

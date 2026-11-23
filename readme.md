@@ -66,9 +66,9 @@ lists every command, flag and report shape.
   RunLength streams for text; extract only the pages you ask for; search the
   extracted text line by line; write embedded JPEGs unchanged and encode 8-bit
   gray or RGB images as PNG. Every skipped part is reported.
-- **Metadata and outlines.** Rewrite title, author, subject, keywords, creator
-  and producer, replace the outline tree, and fill form values while copying
-  every page.
+- **Metadata and outlines.** Read the information dictionary, rewrite title,
+  author, subject, keywords, creator and producer, replace the outline tree,
+  and fill form values while copying every page.
 - **Text stamps.** Paint a watermark, header or footer on every page or a page
   range, with font, size, rotation, opacity and colour; `{page}` and `{pages}`
   are substituted per page.
@@ -97,6 +97,7 @@ Each task maps to one command. Replace the sample names with your own files.
 | Task | Command |
 |---|---|
 | Inspect a document | `open-pdf inspect input.pdf` |
+| Read document metadata | `open-pdf metadata report.pdf` |
 | Merge in argument order | `open-pdf merge part-1.pdf part-2.pdf -o combined.pdf` |
 | Split by page ranges | `open-pdf split combined.pdf --ranges 1-5,10 --out-dir pages/` |
 | Split every N pages | `open-pdf split combined.pdf --every 10 --out-dir pages/` |

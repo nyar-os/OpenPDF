@@ -9,8 +9,8 @@ use open_pdf_core::{
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_pages,
-    merge, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split,
-    stamp,
+    merge, metadata, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata,
+    set_page_boxes, split, stamp,
 };
 use serde_json::json;
 
@@ -883,6 +883,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["reversePages"], "supported");
     assert_eq!(matrix["operations"]["rotatePages"], "supported");
     assert_eq!(matrix["operations"]["setPageBoxes"], "supported");
+    assert_eq!(matrix["operations"]["metadata"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
     for color_space in ["deviceGray", "deviceRgb", "deviceCmyk", "indexed"] {
         assert_eq!(color_spaces[color_space], "supported", "{color_space}");
@@ -1068,6 +1069,21 @@ fn reverse_pages_flips_the_document_order() {
     assert!(three < two && two < one, "unexpected order: {text}");
 
     assert_invalid(reverse_pages(&path, &out, false), "io/exists");
+}
+
+#[test]
+fn metadata_reads_the_information_dictionary() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", Some("Quarterly deck"), &["One", "Two"]);
+
+    let report = metadata(&path).expect("read metadata");
+    assert_eq!(report["path"].as_str(), Some(path.display().to_string().as_str()));
+    assert_eq!(report["pages"], json!(2));
+    assert_eq!(report["metadata"]["title"].as_str(), Some("Quarterly deck"));
+    assert_eq!(report["metadata"]["producer"].as_str(), Some("OpenPDF"));
+
+    let broken = workspace.write("broken-metadata.pdf", b"not a PDF");
+    assert_invalid(metadata(&broken), "format/invalid");
 }
 
 #[test]

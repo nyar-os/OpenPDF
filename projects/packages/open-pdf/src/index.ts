@@ -31,6 +31,7 @@ import type {
     MetadataPatch,
     PdfCapabilities,
     PdfInspectReport,
+    PdfMetadataReport,
     PdfOutlineReport,
     PdfSearchReport,
     ReplacePagesReport,
@@ -81,6 +82,11 @@ export class OpenPDF {
     /** Reads the outline tree of one PDF, optionally capped at `options.depth`. */
     async outline(path: string, options: { readonly depth?: number } = {}): Promise<PdfOutlineReport> {
         return limitOutline(service.outline(path), options.depth);
+    }
+
+    /** Reads the document information dictionary of one PDF. */
+    async metadata(path: string): Promise<PdfMetadataReport> {
+        return service.metadata(path);
     }
 
     /** Concatenates PDF files in the given order. */
@@ -286,6 +292,11 @@ export class OpenPDF {
     /** Reads the outline tree of one PDF, optionally capped at `options.depth`. */
     static outline(path: string, options: { readonly depth?: number } = {}): PdfOutlineReport {
         return limitOutline(service.outline(path), options.depth);
+    }
+
+    /** Reads the document information dictionary of one PDF. */
+    static metadata(path: string): PdfMetadataReport {
+        return service.metadata(path);
     }
 
     /** Concatenates PDF files in the given order. */
