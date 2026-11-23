@@ -1016,7 +1016,7 @@ fn insert_pages_places_the_other_document_after_the_selected_page() {
     let insert = workspace.create("extra.pdf", None, &["Alpha", "Beta"]);
     let out = workspace.path("inserted.pdf");
 
-    let report = insert_pages(&target, &insert, 1, &out, false).expect("insert pages");
+    let report = insert_pages(&target, &insert, None, 1, &out, false).expect("insert pages");
     assert_eq!(report["pages"], json!(5));
     assert_eq!(report["sourcePages"], json!(3));
     assert_eq!(report["insertedPages"], json!(2));
@@ -1032,12 +1032,23 @@ fn insert_pages_places_the_other_document_after_the_selected_page() {
     assert!(one < alpha && alpha < beta && beta < two && two < three, "unexpected order: {text}");
 
     let front = workspace.path("front.pdf");
-    insert_pages(&target, &insert, 0, &front, false).expect("insert before the first page");
+    insert_pages(&target, &insert, None, 0, &front, false).expect("insert before the first page");
     let text = extract_text(&front).expect("extract front").markdown;
     assert!(text.find("Alpha").expect("Alpha") < text.find("One").expect("One"), "unexpected order: {text}");
 
-    assert_invalid(insert_pages(&target, &insert, 4, &out, false), "session/argument-invalid");
-    assert_invalid(insert_pages(&target, &insert, 1, &out, false), "io/exists");
+    assert_invalid(insert_pages(&target, &insert, None, 4, &out, false), "session/argument-invalid");
+    assert_invalid(insert_pages(&target, &insert, None, 1, &out, false), "io/exists");
+
+    let selected_out = workspace.path("selected.pdf");
+    let report = insert_pages(&target, &insert, Some("2"), 1, &selected_out, false).expect("insert one selected page");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["insertedPages"], json!(1));
+    assert_eq!(report["sourceInsertPages"], json!(2));
+    assert_eq!(report["selectedPages"], json!([2]));
+    let text = extract_text(&selected_out).expect("extract selected").markdown;
+    assert!(text.contains("Beta"), "the chosen page goes in: {text}");
+    assert!(!text.contains("Alpha"), "the unselected page stays out: {text}");
+    assert_invalid(insert_pages(&target, &insert, Some("3"), 1, &workspace.path("bad.pdf"), false), "session/argument-invalid");
 }
 
 #[test]

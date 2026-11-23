@@ -188,9 +188,10 @@ export function insertPages(
     after: number,
     out: string,
     overwrite = false,
+    selected?: string,
 ): InsertPagesReport {
     return decode<InsertPagesReport>(() =>
-        binding('insertPages').pdf_insert_pages(path, insert, after, out, overwrite),
+        binding('insertPages').pdf_insert_pages(path, insert, after, out, overwrite, selected ?? ''),
     );
 }
 

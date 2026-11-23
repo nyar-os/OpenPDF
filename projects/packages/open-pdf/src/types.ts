@@ -242,6 +242,10 @@ export interface InsertPagesReport {
     readonly sourcePages: number;
     /** Pages taken from the inserted document. */
     readonly insertedPages: number;
+    /** One-based pages available in the inserted document. */
+    readonly sourceInsertPages?: number;
+    /** One-based pages taken from the inserted document, in insertion order. */
+    readonly selectedPages?: readonly number[];
     /** The inserted document. */
     readonly insert: string;
     /** One-based target page the inserted pages follow; `0` means first. */

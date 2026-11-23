@@ -489,6 +489,7 @@ cli
     .command('insert-pages', 'cli.cmd.insert-pages')
     .option('--insert <file>', 'cli.opt.insert')
     .option('--after <page>', 'cli.opt.after')
+    .option('--pages <ranges>', 'cli.opt.insert-pages')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--overwrite', 'cli.opt.overwrite')
     .actionCtx(async (options, _args, ctx) => {
@@ -513,7 +514,14 @@ cli
             ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
             return 2;
         }
-        const report = await pdf.insertPages(file, insert, after, out, flag(options, 'overwrite'));
+        const report = await pdf.insertPages(
+            file,
+            insert,
+            after,
+            out,
+            flag(options, 'overwrite'),
+            text(options, 'pages'),
+        );
         ctx.emitResult(
             report,
             `inserted ${report.path} pages=${report.pages} after=${report.after} insertedPages=${report.insertedPages}`,

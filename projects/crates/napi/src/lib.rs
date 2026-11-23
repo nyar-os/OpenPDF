@@ -201,9 +201,11 @@ fn pdf_insert_pages(ctx: CallContext) -> Result<JsValue> {
         u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let selected = optional_text(&ctx, 5)?;
     let report = open_pdf_core::insert_pages(
         std::path::Path::new(&path),
         std::path::Path::new(&insert),
+        selected.as_deref().filter(|ranges| !ranges.is_empty()),
         after,
         std::path::Path::new(&out),
         overwrite,

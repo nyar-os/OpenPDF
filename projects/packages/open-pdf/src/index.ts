@@ -142,8 +142,9 @@ export class OpenPDF {
         after: number,
         out: string,
         overwrite = this.defaultOverwrite,
+        selected?: string,
     ): Promise<InsertPagesReport> {
-        return service.insertPages(path, insert, after, out, overwrite);
+        return service.insertPages(path, insert, after, out, overwrite, selected);
     }
 
     /**
@@ -379,8 +380,9 @@ export class OpenPDF {
         after: number,
         out: string,
         overwrite = false,
+        selected?: string,
     ): InsertPagesReport {
-        return service.insertPages(path, insert, after, out, overwrite);
+        return service.insertPages(path, insert, after, out, overwrite, selected);
     }
 
     /** Inserts blank pages after the one-based target page `after`. */

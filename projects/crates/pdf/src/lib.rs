@@ -460,21 +460,28 @@ pub fn duplicate_pages(
     }))
 }
 
-/// Inserts every page of another PDF after the selected page of one PDF.
+/// Inserts pages of another PDF after the selected page of one PDF.
 ///
 /// `after` is the one-based page of `path` after which the pages of `insert`
 /// are placed; `0` puts them before the first page and `pages` appends them at
-/// the end. The output is replaced when it already exists only if `overwrite`
+/// the end. `selected` is an optional one-based range list such as `3,1`: the
+/// source pages are inserted in that order, and every page is used when it is
+/// omitted. The output is replaced when it already exists only if `overwrite`
 /// is true.
 pub fn insert_pages(
     path: &Path,
     insert: &Path,
+    selected: Option<&str>,
     after: u32,
     out: &Path,
     overwrite: bool,
 ) -> Result<serde_json::Value, ServiceError> {
     let total = document_pdf::inspect(path)?.pages;
     let inserted = document_pdf::inspect(insert)?.pages;
+    let chosen = match selected {
+        Some(ranges) => parse_page_ranges(ranges, inserted)?,
+        None => (1..=inserted).collect(),
+    };
     if after as usize > total {
         return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
     }
@@ -496,7 +503,13 @@ pub fn insert_pages(
         }
         let mut inputs = Vec::with_capacity(total + inserted);
         inputs.extend(target.documents.iter().take(after as usize).map(|part| PathBuf::from(&part.path)));
-        inputs.extend(parts.documents.iter().map(|part| PathBuf::from(&part.path)));
+        for page in &chosen {
+            let part = parts
+                .documents
+                .get(*page as usize - 1)
+                .ok_or_else(|| ServiceError::new("format/invalid", "a selected page is missing from the split output"))?;
+            inputs.push(PathBuf::from(&part.path));
+        }
         inputs.extend(target.documents.iter().skip(after as usize).map(|part| PathBuf::from(&part.path)));
         document_pdf::merge(&inputs, out, true, None)
     })();
@@ -507,7 +520,9 @@ pub fn insert_pages(
         "path": merged.path,
         "pages": merged.pages,
         "sourcePages": total,
-        "insertedPages": inserted,
+        "insertedPages": chosen.len(),
+        "sourceInsertPages": inserted,
+        "selectedPages": chosen,
         "insert": insert.display().to_string(),
         "after": after,
     }))
@@ -596,7 +611,7 @@ pub fn insert_blank_pages(
         creator: None,
         page_numbers: None,
     });
-    let outcome = created.and_then(|_| insert_pages(path, &scratch, after, out, true));
+    let outcome = created.and_then(|_| insert_pages(path, &scratch, None, after, out, true));
     let _ = fs::remove_file(&scratch);
     let merged = outcome?;
     Ok(json!({

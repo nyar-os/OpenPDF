@@ -33,7 +33,7 @@ open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count> | --parts 
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
-open-pdf insert-pages <file> --insert <file> --after <page> -o <out> [--overwrite]
+open-pdf insert-pages <file> --insert <file> --after <page> [--pages <ranges>] -o <out> [--overwrite]
 open-pdf insert-blank-pages <file> --after <page> [--count <count>] [--size <size>] -o <out> [--overwrite]
 open-pdf replace-pages <file> --pages <list> --insert <file> -o <out> [--overwrite]
 open-pdf reverse-pages <file> -o <out> [--overwrite]
@@ -109,10 +109,11 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   files take the remainder; it must be between `1` and the page count.
 - `--times` on `duplicate-pages` is the number of copies written for each
   selected page, between `2` and `100`; the default is `2`.
-- `--insert` on `insert-pages` and `replace-pages` is the PDF whose every page
-  is used. On `insert-pages` `--after` is the one-based page of the target the
-  inserted pages follow; `0` puts them before the first page and the target
-  page count appends them. On `replace-pages` the pages named by `--pages` are
+- `--insert` on `insert-pages` and `replace-pages` is the PDF whose pages are
+  used. On `insert-pages` `--pages` optionally selects one-based source pages
+  (e.g. `3,1`) and inserts them in that order; without it every page is used.
+  `--after` is the one-based page of the target the inserted pages follow; `0`
+  puts them before the first page and the target page count appends them. On `replace-pages` the pages named by `--pages` are
   removed and the replacement pages take the position of the first removed
   page. `--count` on `insert-blank-pages` is `1`-`100` and defaults to `1`;
   `--size` accepts the same names as `create --page-size`, and without it the
@@ -182,7 +183,7 @@ Report shapes:
 | `arrange` | `{ path, pages }` |
 | `delete-pages` | `{ path, pages, removed, bytes }` |
 | `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |
-| `insert-pages` | `{ path, pages, sourcePages, insertedPages, insert, after }` |
+| `insert-pages` | `{ path, pages, sourcePages, insertedPages, sourceInsertPages, selectedPages, insert, after }` |
 | `insert-blank-pages` | `{ path, pages, sourcePages, insertedPages, after }` |
 | `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, insert }` |
 | `reverse-pages` | `{ path, pages, sourcePages }` |
