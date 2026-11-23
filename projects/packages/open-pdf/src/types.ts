@@ -122,6 +122,7 @@ export interface PdfCapabilities {
         readonly create: SupportLevel;
         readonly merge: SupportLevel;
         readonly split: SupportLevel;
+        readonly splitParts: SupportLevel;
         readonly arrange: SupportLevel;
         readonly deletePages: SupportLevel;
         readonly duplicatePages: SupportLevel;

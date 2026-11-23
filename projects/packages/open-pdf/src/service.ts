@@ -120,6 +120,16 @@ export function splitEvery(path: string, every: number, outDir: string): SplitRe
     return decode<SplitReport>(() => binding('splitEvery').pdf_split_every(path, every, outDir));
 }
 
+/**
+ * Splits one PDF into `parts` consecutive files, balancing page counts.
+ *
+ * Earlier files take the remainder: seven pages in three parts become
+ * `3, 2, 2`. `parts` must be between `1` and the page count.
+ */
+export function splitParts(path: string, parts: number, outDir: string): SplitReport {
+    return decode<SplitReport>(() => binding('splitParts').pdf_split_parts(path, parts, outDir));
+}
+
 /** Reorders, removes and rotates pages into a new PDF. */
 export function arrange(path: string, out: string, ops: ArrangeRequest = {}): ArrangeReport {
     return decode<ArrangeReport>(() =>

@@ -105,6 +105,11 @@ export class OpenPDF {
         return service.splitEvery(path, every, outDir);
     }
 
+    /** Splits one PDF into `parts` consecutive files, balancing page counts. */
+    async splitParts(path: string, parts: number, outDir: string): Promise<SplitReport> {
+        return service.splitParts(path, parts, outDir);
+    }
+
     /** Reorders, removes and rotates pages into a new PDF. */
     async arrange(path: string, out: string, ops: ArrangeRequest = {}): Promise<ArrangeReport> {
         return service.arrange(path, out, ops);
@@ -330,6 +335,11 @@ export class OpenPDF {
     /** Splits one PDF into consecutive files of at most `every` pages each. */
     static splitEvery(path: string, every: number, outDir: string): SplitReport {
         return service.splitEvery(path, every, outDir);
+    }
+
+    /** Splits one PDF into `parts` consecutive files, balancing page counts. */
+    static splitParts(path: string, parts: number, outDir: string): SplitReport {
+        return service.splitParts(path, parts, outDir);
     }
 
     /** Reorders, removes and rotates pages into a new PDF. */

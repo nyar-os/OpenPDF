@@ -29,7 +29,7 @@ open-pdf inspect <file> | --stdin
 open-pdf outline <file> [--depth <n>]
 open-pdf metadata <file>
 open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
-open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count>)
+open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count> | --parts <count>)
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
@@ -104,6 +104,8 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   Each part is `N` or `N-M` with `N <= M`. Out-of-range bounds are rejected; no
   operation truncates silently.
 - `--every` must be a positive integer.
+- `--parts` splits into exactly that many files, balancing pages so earlier
+  files take the remainder; it must be between `1` and the page count.
 - `--times` on `duplicate-pages` is the number of copies written for each
   selected page, between `2` and `100`; the default is `2`.
 - `--insert` on `insert-pages` and `replace-pages` is the PDF whose every page
@@ -171,6 +173,7 @@ Report shapes:
 | `metadata` | `{ path, pages, metadata }` |
 | `merge` | `{ path, pages, bytes }` |
 | `split` | `{ documents: [{ path, pages }] }` |
+| `split --parts` | `{ outDir, parts, pages, documents: [{ path, pages }] }` |
 | `arrange` | `{ path, pages }` |
 | `delete-pages` | `{ path, pages, removed, bytes }` |
 | `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |

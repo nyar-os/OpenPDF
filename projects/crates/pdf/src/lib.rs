@@ -421,6 +421,38 @@ pub fn insert_pages(
     }))
 }
 
+/// Splits one PDF into `parts` consecutive files with counts as even as possible.
+///
+/// Earlier files take the remainder, so seven pages in three parts become
+/// `3,2,2`. `parts` must be between `1` and the page count. Files are named by
+/// the split route and written into `out_dir`.
+pub fn split_parts(path: &Path, parts: usize, out_dir: &Path) -> Result<serde_json::Value, ServiceError> {
+    if parts == 0 {
+        return Err(invalid_pages("`parts` must be at least 1"));
+    }
+    let total = document_pdf::inspect(path)?.pages;
+    if parts > total {
+        return Err(invalid_pages(format!("`parts` {parts} is larger than the {total}-page document")));
+    }
+    let base = total / parts;
+    let extra = total % parts;
+    let mut ranges = Vec::with_capacity(parts);
+    let mut start = 1usize;
+    for index in 0..parts {
+        let count = base + usize::from(index < extra);
+        let end = start + count - 1;
+        ranges.push(if start == end { start.to_string() } else { format!("{start}-{end}") });
+        start = end + 1;
+    }
+    let report = document_pdf::split(path, &ranges.join(","), out_dir)?;
+    Ok(json!({
+        "outDir": out_dir.display().to_string(),
+        "parts": parts,
+        "pages": total,
+        "documents": report.documents,
+    }))
+}
+
 /// Inserts `count` blank pages after a page of one PDF.
 ///
 /// `after` is the one-based page the blanks follow; `0` puts them before the
@@ -621,6 +653,7 @@ pub fn capabilities() -> serde_json::Value {
             "create": "supported",
             "merge": "supported",
             "split": "supported",
+            "splitParts": "supported",
             "arrange": "supported",
             "deletePages": "supported",
             "duplicatePages": "supported",

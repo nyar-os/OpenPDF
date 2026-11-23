@@ -124,6 +124,18 @@ fn pdf_split_every(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Splits one PDF into a fixed number of consecutive files.
+#[function]
+fn pdf_split_parts(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let parts = argument(&ctx, 1)?.as_i64()?;
+    let parts = usize::try_from(parts).map_err(|_| Error::new("session/argument-invalid: `parts` must be positive"))?;
+    let out_dir = text(&ctx, 2)?;
+    let report =
+        open_pdf_core::split_parts(std::path::Path::new(&path), parts, std::path::Path::new(&out_dir)).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Reorders, removes and rotates pages into a new PDF.
 #[function]
 fn pdf_arrange(ctx: CallContext) -> Result<JsValue> {
@@ -486,6 +498,7 @@ register_module![
     pdf_merge,
     pdf_split,
     pdf_split_every,
+    pdf_split_parts,
     pdf_arrange,
     pdf_delete_pages,
     pdf_duplicate_pages,

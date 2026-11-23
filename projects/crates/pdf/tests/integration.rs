@@ -10,6 +10,7 @@ use open_pdf_core::{
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_blank_pages, insert_pages,
     merge, metadata, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata,
+    split_parts,
     set_page_boxes, split, stamp,
 };
 use serde_json::json;
@@ -277,6 +278,27 @@ fn split_keeps_ranges_in_order_and_names_multi_page_files() {
     let three = extracted.markdown.find("Three").expect("Three");
     let four = extracted.markdown.find("Four").expect("Four");
     assert!(three < four);
+}
+
+#[test]
+fn split_parts_balances_page_counts_with_earlier_remainders() {
+    let workspace = Workspace::new();
+    let path = workspace.create("seven.pdf", None, &["One", "Two", "Three", "Four", "Five", "Six", "Seven"]);
+    let out_dir = workspace.path("balanced");
+
+    let report = split_parts(&path, 3, &out_dir).expect("split into parts");
+    assert_eq!(report["parts"], json!(3));
+    assert_eq!(report["pages"], json!(7));
+    let documents = report["documents"].as_array().expect("documents");
+    let pages: Vec<u64> = documents.iter().map(|part| part["pages"].as_u64().expect("pages")).collect();
+    assert_eq!(pages, vec![3, 2, 2], "earlier files take the remainder");
+    for part in documents {
+        let inspected = inspect(Path::new(part["path"].as_str().expect("path"))).expect("inspect part");
+        assert_eq!(inspected.pages as u64, part["pages"].as_u64().expect("pages"));
+    }
+
+    assert_invalid(split_parts(&path, 0, &workspace.path("empty")), "session/argument-invalid");
+    assert_invalid(split_parts(&path, 8, &workspace.path("many")), "session/argument-invalid");
 }
 
 #[test]

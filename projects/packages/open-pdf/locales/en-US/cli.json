@@ -39,6 +39,7 @@
             "image-stem": "File stem for images extracted from standard input, default stdin",
             "ranges": "Comma-separated 1-based ranges, e.g. 1-5,10,15-20",
             "every": "Split into consecutive files of N pages each",
+            "parts": "Split into N files with page counts as even as possible",
             "order": "Comma-separated 1-based page order",
             "remove": "Comma-separated 1-based pages to drop",
             "rotate": "Clockwise rotation to add to every page: 90, 180 or 270",

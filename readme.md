@@ -102,6 +102,7 @@ Each task maps to one command. Replace the sample names with your own files.
 | Merge in argument order | `open-pdf merge part-1.pdf part-2.pdf -o combined.pdf` |
 | Split by page ranges | `open-pdf split combined.pdf --ranges 1-5,10 --out-dir pages/` |
 | Split every N pages | `open-pdf split combined.pdf --every 10 --out-dir pages/` |
+| Split into three balanced files | `open-pdf split combined.pdf --parts 3 --out-dir thirds/` |
 | Keep only selected pages | `open-pdf extract-pages combined.pdf --pages 1-3,5 -o excerpt.pdf` |
 | Delete selected pages | `open-pdf delete-pages combined.pdf --pages 2,7-9 -o trimmed.pdf` |
 | Insert pages from another PDF | `open-pdf insert-pages combined.pdf --insert extra.pdf --after 3 -o spliced.pdf` |

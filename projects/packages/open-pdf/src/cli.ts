@@ -327,11 +327,13 @@ cli
     .command('split', 'cli.cmd.split')
     .option('--ranges <list>', 'cli.opt.ranges')
     .option('--every <count>', 'cli.opt.every')
+    .option('--parts <count>', 'cli.opt.parts')
     .option('-o, --out-dir <dir>', 'cli.opt.out-dir')
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const ranges = text(options, 'ranges');
         const every = text(options, 'every');
+        const parts = text(options, 'parts');
         const outDir = text(options, 'out-dir');
         if (file === undefined) {
             ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
@@ -343,9 +345,10 @@ cli
             });
             return 2;
         }
-        if ((ranges === undefined) === (every === undefined)) {
+        const selected = [ranges, every, parts].filter((option) => option !== undefined).length;
+        if (selected !== 1) {
             ctx.fail('open-pdf.cli.split-args', {
-                message: 'exactly one of `--ranges <list>` and `--every <count>` is required',
+                message: 'exactly one of `--ranges <list>`, `--every <count>` and `--parts <count>` is required',
             });
             return 2;
         }
@@ -357,6 +360,13 @@ cli
                 return 2;
             }
             report = await pdf.splitEvery(file, count, outDir);
+        } else if (parts !== undefined) {
+            const count = Number(parts);
+            if (!Number.isSafeInteger(count) || count < 1) {
+                ctx.fail('open-pdf.cli.split-args', { message: '`--parts <count>` must be a positive integer' });
+                return 2;
+            }
+            report = await pdf.splitParts(file, count, outDir);
         } else {
             report = await pdf.split(file, ranges as string, outDir);
         }
