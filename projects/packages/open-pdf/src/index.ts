@@ -34,6 +34,7 @@ import type {
     PdfOutlineReport,
     PdfSearchReport,
     ReplacePagesReport,
+    ReversePagesReport,
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
@@ -138,6 +139,11 @@ export class OpenPDF {
         overwrite = this.defaultOverwrite,
     ): Promise<ReplacePagesReport> {
         return service.replacePages(path, pages, insert, out, overwrite);
+    }
+
+    /** Reverses the page order into a new PDF. */
+    async reversePages(path: string, out: string, overwrite = this.defaultOverwrite): Promise<ReversePagesReport> {
+        return service.reversePages(path, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */
@@ -338,6 +344,11 @@ export class OpenPDF {
         overwrite = false,
     ): ReplacePagesReport {
         return service.replacePages(path, pages, insert, out, overwrite);
+    }
+
+    /** Reverses the page order into a new PDF. */
+    static reversePages(path: string, out: string, overwrite = false): ReversePagesReport {
+        return service.reversePages(path, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */

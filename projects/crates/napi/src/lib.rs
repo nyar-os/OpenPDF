@@ -197,6 +197,17 @@ fn pdf_replace_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Reverses the page order of one PDF into a new document.
+#[function]
+fn pdf_reverse_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out = text(&ctx, 1)?;
+    let overwrite = ctx.args().get(2).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report =
+        open_pdf_core::reverse_pages(std::path::Path::new(&path), std::path::Path::new(&out), overwrite).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Adds a clockwise rotation to the selected pages of one PDF file.
 #[function]
 fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
@@ -446,6 +457,7 @@ register_module![
     pdf_duplicate_pages,
     pdf_insert_pages,
     pdf_replace_pages,
+    pdf_reverse_pages,
     pdf_rotate_pages,
     pdf_set_page_boxes,
     pdf_set_metadata,

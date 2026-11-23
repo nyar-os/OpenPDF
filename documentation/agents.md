@@ -34,6 +34,7 @@ open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
 open-pdf insert-pages <file> --insert <file> --after <page> -o <out> [--overwrite]
 open-pdf replace-pages <file> --pages <list> --insert <file> -o <out> [--overwrite]
+open-pdf reverse-pages <file> -o <out> [--overwrite]
 open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
 open-pdf set-page-boxes <file> --pages <list> --box <l,b,r,t> -o <out> [--overwrite]
@@ -169,6 +170,7 @@ Report shapes:
 | `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |
 | `insert-pages` | `{ path, pages, sourcePages, insertedPages, insert, after }` |
 | `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, insert }` |
+| `reverse-pages` | `{ path, pages, sourcePages }` |
 | `extract-pages` | `{ path, pages, kept, removed, bytes }` |
 | `rotate` | `{ path, pages, rotated, bytes }` |
 | `set-page-boxes` | `{ path, pages, cropped, bytes }` |
@@ -253,16 +255,16 @@ transformations never read from stdin, and `split` always reads a path.
 ## Overwrite rules
 
 `--overwrite` exists only on `merge`, `delete-pages`, `duplicate-pages`,
-`insert-pages`, `replace-pages`, `extract-pages`, `rotate`, `set-page-boxes`
-and `create`. The default is off.
+`insert-pages`, `replace-pages`, `reverse-pages`, `extract-pages`, `rotate`,
+`set-page-boxes` and `create`. The default is off.
 When a guarded output already exists and overwrite is not allowed, the operation
 fails with `io/exists`; nothing is replaced in place.
 
 `split`, `arrange`, `set-metadata`, `bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
 default for `merge`, `deletePages`, `duplicatePages`, `insertPages`,
-`replacePages`, `keepPages`, `rotatePages`, `setPageBoxes` and `create`; the
-remaining methods do not accept an overwrite argument.
+`replacePages`, `reversePages`, `keepPages`, `rotatePages`, `setPageBoxes` and
+`create`; the remaining methods do not accept an overwrite argument.
 
 ## Guardrails
 

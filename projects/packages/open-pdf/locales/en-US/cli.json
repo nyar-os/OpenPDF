@@ -13,6 +13,7 @@
             "duplicate-pages": "Repeat the selected pages directly after themselves",
             "insert-pages": "Insert every page of another PDF after a selected page",
             "replace-pages": "Replace the selected pages with every page of another PDF",
+            "reverse-pages": "Reverse the page order into a new PDF",
             "extract-pages": "Keep only the selected pages, in source order, in a new PDF",
             "rotate": "Add a clockwise rotation to the selected pages",
             "set-page-boxes": "Write a CropBox on the selected pages",

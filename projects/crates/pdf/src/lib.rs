@@ -468,6 +468,28 @@ pub fn replace_pages(
     }))
 }
 
+/// Reverses the page order of one PDF into a new document.
+///
+/// The last page becomes the first; page content is copied, not rewritten.
+/// The output is replaced when it already exists only if `overwrite` is true.
+pub fn reverse_pages(path: &Path, out: &Path, overwrite: bool) -> Result<serde_json::Value, ServiceError> {
+    let total = document_pdf::inspect(path)?.pages;
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    let order: Vec<usize> = (1..=total).rev().collect();
+    let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
+    let arranged = document_pdf::arrange(path, out, &request)?;
+    Ok(json!({
+        "path": arranged.path,
+        "pages": arranged.pages,
+        "sourcePages": total,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -528,6 +550,7 @@ pub fn capabilities() -> serde_json::Value {
             "duplicatePages": "supported",
             "insertPages": "supported",
             "replacePages": "supported",
+            "reversePages": "supported",
             "rotatePages": "supported",
             "setPageBoxes": "supported",
             "setMetadata": "supported",

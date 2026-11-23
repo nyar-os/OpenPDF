@@ -519,6 +519,26 @@ cli
     });
 
 cli
+    .command('reverse-pages', 'cli.cmd.reverse-pages')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const report = await pdf.reversePages(file, out, flag(options, 'overwrite'));
+        ctx.emitResult(report, `reversed ${report.path} pages=${report.pages}`);
+        return 0;
+    });
+
+cli
     .command('extract-pages', 'cli.cmd.extract-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')

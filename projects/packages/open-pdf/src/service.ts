@@ -34,6 +34,7 @@ import type {
     PdfOutlineReport,
     PdfSearchReport,
     ReplacePagesReport,
+    ReversePagesReport,
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
@@ -186,6 +187,11 @@ export function replacePages(
     return decode<ReplacePagesReport>(() =>
         binding('replacePages').pdf_replace_pages(path, pages, insert, out, overwrite),
     );
+}
+
+/** Reverses the page order of `path` into a new PDF. */
+export function reversePages(path: string, out: string, overwrite = false): ReversePagesReport {
+    return decode<ReversePagesReport>(() => binding('reversePages').pdf_reverse_pages(path, out, overwrite));
 }
 
 /**

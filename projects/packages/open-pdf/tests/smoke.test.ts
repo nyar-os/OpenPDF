@@ -64,6 +64,7 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.deletePages('input.pdf', '1', 'out.pdf'),
         () => OpenPDF.insertPages('input.pdf', 'extra.pdf', 1, 'out.pdf'),
         () => OpenPDF.replacePages('input.pdf', '1', 'extra.pdf', 'out.pdf'),
+        () => OpenPDF.reversePages('input.pdf', 'out.pdf'),
         () => OpenPDF.rotatePages('input.pdf', '1', 90, 'out.pdf'),
         () => OpenPDF.setPageBoxes('input.pdf', '1', [0, 0, 10, 10], 'out.pdf'),
         () => OpenPDF.setMetadata('input.pdf', 'out.pdf', { title: 'x' }),
@@ -145,6 +146,22 @@ test('replacePages splices the other document into the selection', { skip: witho
         assert.deepEqual(report.replaced, [2]);
         assert.equal(report.replacementPages, 1);
         assert.equal(OpenPDF.inspect(out).pages, 3);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('reversePages flips the page order', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const out = path.join(dir, 'reversed.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two'], overwrite: true });
+        const report = await OpenPDF.reversePages(source, out);
+        assert.equal(report.pages, 2);
+        assert.equal(report.sourcePages, 2);
+        const text = OpenPDF.extractText(out).markdown;
+        assert.ok(text.indexOf('Two') < text.indexOf('One'), text);
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

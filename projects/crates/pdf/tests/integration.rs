@@ -9,7 +9,8 @@ use open_pdf_core::{
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_pages,
-    merge, outline, replace_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
+    merge, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split,
+    stamp,
 };
 use serde_json::json;
 
@@ -879,6 +880,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["deletePages"], "supported");
     assert_eq!(matrix["operations"]["insertPages"], "supported");
     assert_eq!(matrix["operations"]["replacePages"], "supported");
+    assert_eq!(matrix["operations"]["reversePages"], "supported");
     assert_eq!(matrix["operations"]["rotatePages"], "supported");
     assert_eq!(matrix["operations"]["setPageBoxes"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
@@ -1046,6 +1048,26 @@ fn replace_pages_splices_the_replacement_in_place() {
         "<< /Type /Pages /Kids [] /Count 0 >>",
     ]));
     assert_invalid(replace_pages(&target, "1", &empty, &workspace.path("empty-out.pdf"), true), "session/argument-invalid");
+}
+
+#[test]
+fn reverse_pages_flips_the_document_order() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
+    let out = workspace.path("reversed.pdf");
+
+    let report = reverse_pages(&path, &out, false).expect("reverse pages");
+    assert_eq!(report["pages"], json!(3));
+    assert_eq!(report["sourcePages"], json!(3));
+    assert_eq!(report["path"].as_str(), Some(out.display().to_string().as_str()));
+
+    let text = extract_text(&out).expect("extract reversed").markdown;
+    let three = text.find("Three").expect("Three");
+    let two = text.find("Two").expect("Two");
+    let one = text.find("One").expect("One");
+    assert!(three < two && two < one, "unexpected order: {text}");
+
+    assert_invalid(reverse_pages(&path, &out, false), "io/exists");
 }
 
 #[test]

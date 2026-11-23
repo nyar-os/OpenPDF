@@ -120,6 +120,7 @@ export interface PdfCapabilities {
         readonly duplicatePages: SupportLevel;
         readonly insertPages: SupportLevel;
         readonly replacePages: SupportLevel;
+        readonly reversePages: SupportLevel;
         readonly rotatePages: SupportLevel;
         readonly setPageBoxes: SupportLevel;
         readonly setMetadata: SupportLevel;
@@ -230,6 +231,15 @@ export interface ReplacePagesReport {
     readonly replacementPages: number;
     /** The replacement document. */
     readonly insert: string;
+}
+
+/** Result of `reversePages()`. */
+export interface ReversePagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the source document. */
+    readonly sourcePages: number;
 }
 
 /** Result of `deletePages()`. */
