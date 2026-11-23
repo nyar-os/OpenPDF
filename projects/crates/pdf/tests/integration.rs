@@ -9,7 +9,7 @@ use open_pdf_core::{
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_pages,
-    merge, outline, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
+    merge, outline, replace_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
 use serde_json::json;
 
@@ -878,6 +878,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["fillForm"], "supported");
     assert_eq!(matrix["operations"]["deletePages"], "supported");
     assert_eq!(matrix["operations"]["insertPages"], "supported");
+    assert_eq!(matrix["operations"]["replacePages"], "supported");
     assert_eq!(matrix["operations"]["rotatePages"], "supported");
     assert_eq!(matrix["operations"]["setPageBoxes"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
@@ -1009,6 +1010,42 @@ fn insert_pages_places_the_other_document_after_the_selected_page() {
 
     assert_invalid(insert_pages(&target, &insert, 4, &out, false), "session/argument-invalid");
     assert_invalid(insert_pages(&target, &insert, 1, &out, false), "io/exists");
+}
+
+#[test]
+fn replace_pages_splices_the_replacement_in_place() {
+    let workspace = Workspace::new();
+    let target = workspace.create("deck.pdf", None, &["One", "Two", "Three", "Four"]);
+    let insert = workspace.create("extra.pdf", None, &["Alpha", "Beta"]);
+    let out = workspace.path("replaced.pdf");
+
+    let report = replace_pages(&target, "2-3", &insert, &out, false).expect("replace pages");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["sourcePages"], json!(4));
+    assert_eq!(report["replaced"], json!([2, 3]));
+    assert_eq!(report["replacementPages"], json!(2));
+
+    let text = extract_text(&out).expect("extract replaced").markdown;
+    let one = text.find("One").expect("One");
+    let alpha = text.find("Alpha").expect("Alpha");
+    let beta = text.find("Beta").expect("Beta");
+    let four = text.find("Four").expect("Four");
+    assert!(one < alpha && alpha < beta && beta < four, "unexpected order: {text}");
+    assert!(!text.contains("Two") && !text.contains("Three"), "removed pages survived: {text}");
+
+    let tail = workspace.path("tail.pdf");
+    replace_pages(&target, "4", &insert, &tail, false).expect("replace the tail");
+    let text = extract_text(&tail).expect("extract tail").markdown;
+    assert!(text.find("Three").expect("Three") < text.find("Alpha").expect("Alpha"), "unexpected order: {text}");
+
+    assert_invalid(replace_pages(&target, "9", &insert, &workspace.path("range.pdf"), true), "session/argument-invalid");
+    assert_invalid(replace_pages(&target, "1", &insert, &out, false), "io/exists");
+
+    let empty = workspace.write("empty.pdf", &assemble(&[
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [] /Count 0 >>",
+    ]));
+    assert_invalid(replace_pages(&target, "1", &empty, &workspace.path("empty-out.pdf"), true), "session/argument-invalid");
 }
 
 #[test]

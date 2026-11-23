@@ -408,6 +408,66 @@ pub fn insert_pages(
     }))
 }
 
+/// Replaces the selected pages of one PDF with every page of another PDF.
+///
+/// The selected pages are removed and the pages of `insert` take the position
+/// of the first removed page; the remaining pages keep their order. The output
+/// is replaced when it already exists only if `overwrite` is true.
+pub fn replace_pages(
+    path: &Path,
+    pages: &str,
+    insert: &Path,
+    out: &Path,
+    overwrite: bool,
+) -> Result<serde_json::Value, ServiceError> {
+    let total = document_pdf::inspect(path)?.pages;
+    let selected = parse_page_ranges(pages, total)?;
+    let replacement = document_pdf::inspect(insert)?.pages;
+    if replacement == 0 {
+        return Err(invalid_pages("the replacement PDF has no pages"));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    // `arrange` cannot reach across documents, so split both files into
+    // one-page parts and merge the spliced sequence back in order.
+    let target_scratch = temporary_path().with_extension("rep-a");
+    let insert_scratch = temporary_path().with_extension("rep-b");
+    let outcome = (|| {
+        let target = document_pdf::split_every(path, 1, &target_scratch)?;
+        let parts = document_pdf::split_every(insert, 1, &insert_scratch)?;
+        if target.documents.len() != total {
+            return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
+        }
+        let first = selected.first().copied().unwrap_or_default();
+        let mut inputs = Vec::with_capacity(total + parts.documents.len());
+        for (index, part) in target.documents.iter().enumerate() {
+            let page = index + 1;
+            if page == first {
+                inputs.extend(parts.documents.iter().map(|replacement| PathBuf::from(&replacement.path)));
+            }
+            if !selected.contains(&page) {
+                inputs.push(PathBuf::from(&part.path));
+            }
+        }
+        document_pdf::merge(&inputs, out, true, None)
+    })();
+    let _ = fs::remove_dir_all(&target_scratch);
+    let _ = fs::remove_dir_all(&insert_scratch);
+    let merged = outcome?;
+    Ok(json!({
+        "path": merged.path,
+        "pages": merged.pages,
+        "sourcePages": total,
+        "replaced": selected,
+        "replacementPages": replacement,
+        "insert": insert.display().to_string(),
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -467,6 +527,7 @@ pub fn capabilities() -> serde_json::Value {
             "deletePages": "supported",
             "duplicatePages": "supported",
             "insertPages": "supported",
+            "replacePages": "supported",
             "rotatePages": "supported",
             "setPageBoxes": "supported",
             "setMetadata": "supported",

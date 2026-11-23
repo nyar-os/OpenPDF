@@ -178,6 +178,25 @@ fn pdf_insert_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Replaces the selected pages of one PDF with every page of another PDF.
+#[function]
+fn pdf_replace_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let insert = text(&ctx, 2)?;
+    let out = text(&ctx, 3)?;
+    let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::replace_pages(
+        std::path::Path::new(&path),
+        &pages,
+        std::path::Path::new(&insert),
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Adds a clockwise rotation to the selected pages of one PDF file.
 #[function]
 fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
@@ -426,6 +445,7 @@ register_module![
     pdf_delete_pages,
     pdf_duplicate_pages,
     pdf_insert_pages,
+    pdf_replace_pages,
     pdf_rotate_pages,
     pdf_set_page_boxes,
     pdf_set_metadata,

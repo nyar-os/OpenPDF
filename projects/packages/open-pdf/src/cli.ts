@@ -484,6 +484,41 @@ cli
     });
 
 cli
+    .command('replace-pages', 'cli.cmd.replace-pages')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('--insert <file>', 'cli.opt.insert')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options);
+        const insert = text(options, 'insert');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages.length === 0) {
+            ctx.fail('open-pdf.cli.pages-args', { message: '`--pages <list>` must be a comma-separated 1-based page list' });
+            return 2;
+        }
+        if (insert === undefined || insert.length === 0) {
+            ctx.fail('open-pdf.cli.insert-args', { message: '`--insert <file>` is required' });
+            return 2;
+        }
+        const report = await pdf.replacePages(file, pages, insert, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `replaced ${report.path} pages=${report.pages} replaced=${formatPageList(report.replaced)} replacementPages=${report.replacementPages}`,
+        );
+        return 0;
+    });
+
+cli
     .command('extract-pages', 'cli.cmd.extract-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')

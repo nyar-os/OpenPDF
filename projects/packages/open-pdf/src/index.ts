@@ -33,6 +33,7 @@ import type {
     PdfInspectReport,
     PdfOutlineReport,
     PdfSearchReport,
+    ReplacePagesReport,
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
@@ -126,6 +127,17 @@ export class OpenPDF {
         overwrite = this.defaultOverwrite,
     ): Promise<InsertPagesReport> {
         return service.insertPages(path, insert, after, out, overwrite);
+    }
+
+    /** Replaces the selected pages with every page of `insert`. */
+    async replacePages(
+        path: string,
+        pages: string,
+        insert: string,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<ReplacePagesReport> {
+        return service.replacePages(path, pages, insert, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */
@@ -315,6 +327,17 @@ export class OpenPDF {
         overwrite = false,
     ): InsertPagesReport {
         return service.insertPages(path, insert, after, out, overwrite);
+    }
+
+    /** Replaces the selected pages with every page of `insert`. */
+    static replacePages(
+        path: string,
+        pages: string,
+        insert: string,
+        out: string,
+        overwrite = false,
+    ): ReplacePagesReport {
+        return service.replacePages(path, pages, insert, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */

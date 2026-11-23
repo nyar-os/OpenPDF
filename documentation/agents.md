@@ -33,6 +33,7 @@ open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <d
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
 open-pdf insert-pages <file> --insert <file> --after <page> -o <out> [--overwrite]
+open-pdf replace-pages <file> --pages <list> --insert <file> -o <out> [--overwrite]
 open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
 open-pdf set-page-boxes <file> --pages <list> --box <l,b,r,t> -o <out> [--overwrite]
@@ -102,9 +103,12 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
 - `--every` must be a positive integer.
 - `--times` on `duplicate-pages` is the number of copies written for each
   selected page, between `2` and `100`; the default is `2`.
-- `--insert` on `insert-pages` is the PDF whose every page is inserted, and
-  `--after` is the one-based page of the target the inserted pages follow.
-  `0` puts them before the first page and the target page count appends them.
+- `--insert` on `insert-pages` and `replace-pages` is the PDF whose every page
+  is used. On `insert-pages` `--after` is the one-based page of the target the
+  inserted pages follow; `0` puts them before the first page and the target
+  page count appends them. On `replace-pages` the pages named by `--pages` are
+  removed and the replacement pages take the position of the first removed
+  page, so the page count changes by `replacementPages - removed`.
 - `--order` and `--remove` are comma-separated page numbers. When both are
   given, removal runs first and `--order` must list every surviving page once.
 - `--rotate` on `arrange` and `--degrees` on `rotate` are clockwise and must be
@@ -164,6 +168,7 @@ Report shapes:
 | `delete-pages` | `{ path, pages, removed, bytes }` |
 | `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |
 | `insert-pages` | `{ path, pages, sourcePages, insertedPages, insert, after }` |
+| `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, insert }` |
 | `extract-pages` | `{ path, pages, kept, removed, bytes }` |
 | `rotate` | `{ path, pages, rotated, bytes }` |
 | `set-page-boxes` | `{ path, pages, cropped, bytes }` |
@@ -248,16 +253,16 @@ transformations never read from stdin, and `split` always reads a path.
 ## Overwrite rules
 
 `--overwrite` exists only on `merge`, `delete-pages`, `duplicate-pages`,
-`insert-pages`, `extract-pages`, `rotate`, `set-page-boxes` and `create`. The
-default is off.
+`insert-pages`, `replace-pages`, `extract-pages`, `rotate`, `set-page-boxes`
+and `create`. The default is off.
 When a guarded output already exists and overwrite is not allowed, the operation
 fails with `io/exists`; nothing is replaced in place.
 
 `split`, `arrange`, `set-metadata`, `bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
 default for `merge`, `deletePages`, `duplicatePages`, `insertPages`,
-`keepPages`, `rotatePages`, `setPageBoxes` and `create`; the remaining methods
-do not accept an overwrite argument.
+`replacePages`, `keepPages`, `rotatePages`, `setPageBoxes` and `create`; the
+remaining methods do not accept an overwrite argument.
 
 ## Guardrails
 

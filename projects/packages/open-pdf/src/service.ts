@@ -33,6 +33,7 @@ import type {
     PdfInspectReport,
     PdfOutlineReport,
     PdfSearchReport,
+    ReplacePagesReport,
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
@@ -166,6 +167,24 @@ export function insertPages(
 ): InsertPagesReport {
     return decode<InsertPagesReport>(() =>
         binding('insertPages').pdf_insert_pages(path, insert, after, out, overwrite),
+    );
+}
+
+/**
+ * Replaces the selected pages of `path` with every page of `insert`.
+ *
+ * The replacement pages take the position of the first removed page and the
+ * remaining pages keep their order.
+ */
+export function replacePages(
+    path: string,
+    pages: string,
+    insert: string,
+    out: string,
+    overwrite = false,
+): ReplacePagesReport {
+    return decode<ReplacePagesReport>(() =>
+        binding('replacePages').pdf_replace_pages(path, pages, insert, out, overwrite),
     );
 }
 

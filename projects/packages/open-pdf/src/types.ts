@@ -119,6 +119,7 @@ export interface PdfCapabilities {
         readonly deletePages: SupportLevel;
         readonly duplicatePages: SupportLevel;
         readonly insertPages: SupportLevel;
+        readonly replacePages: SupportLevel;
         readonly rotatePages: SupportLevel;
         readonly setPageBoxes: SupportLevel;
         readonly setMetadata: SupportLevel;
@@ -214,6 +215,21 @@ export interface InsertPagesReport {
     readonly insert: string;
     /** One-based target page the inserted pages follow; `0` means first. */
     readonly after: number;
+}
+
+/** Result of `replacePages()`. */
+export interface ReplacePagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the target document. */
+    readonly sourcePages: number;
+    /** One-based pages that were removed, in document order. */
+    readonly replaced: readonly number[];
+    /** Pages taken from the replacement document. */
+    readonly replacementPages: number;
+    /** The replacement document. */
+    readonly insert: string;
 }
 
 /** Result of `deletePages()`. */
