@@ -44,6 +44,7 @@ import type {
     SplitReport,
     StampReport,
     StampRequest,
+    SwapPagesReport,
 } from './types.js';
 
 export { OpenPdfError, NotImplementedError, errorCodes, isOpenPdfError } from './errors.js';
@@ -196,6 +197,17 @@ export class OpenPDF {
         selected: string | null = null,
     ): Promise<ReversePagesReport> {
         return service.reversePages(path, out, overwrite, selected);
+    }
+
+    /** Exchanges two equal-length page selections and keeps every other page in place. */
+    async swapPages(
+        path: string,
+        pages: string,
+        withPages: string,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<SwapPagesReport> {
+        return service.swapPages(path, pages, withPages, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */
@@ -440,6 +452,17 @@ export class OpenPDF {
         selected: string | null = null,
     ): ReversePagesReport {
         return service.reversePages(path, out, overwrite, selected);
+    }
+
+    /** Exchanges two equal-length page selections and keeps every other page in place. */
+    static swapPages(
+        path: string,
+        pages: string,
+        withPages: string,
+        out: string,
+        overwrite = false,
+    ): SwapPagesReport {
+        return service.swapPages(path, pages, withPages, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */

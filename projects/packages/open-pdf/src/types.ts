@@ -309,6 +309,19 @@ export interface ReversePagesReport {
     readonly sourcePages: number;
 }
 
+/** Result of `swapPages()`. */
+export interface SwapPagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the source document. */
+    readonly sourcePages: number;
+    /** The pages that moved to the `with` positions. */
+    readonly swapped: readonly number[];
+    /** The pages that took the `swapped` positions. */
+    readonly with: readonly number[];
+}
+
 /** Result of `deletePages()`. */
 export interface DeletePagesReport {
     readonly path: string;

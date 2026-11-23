@@ -293,6 +293,25 @@ fn pdf_reverse_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Exchanges two equal-length page selections of one PDF file.
+#[function]
+fn pdf_swap_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let with = text(&ctx, 2)?;
+    let out = text(&ctx, 3)?;
+    let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::swap_pages(
+        std::path::Path::new(&path),
+        &pages,
+        &with,
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Adds a clockwise rotation to the selected pages of one PDF file.
 #[function]
 fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
@@ -555,6 +574,7 @@ register_module![
     pdf_insert_blank_pages,
     pdf_replace_pages,
     pdf_reverse_pages,
+    pdf_swap_pages,
     pdf_move_pages,
     pdf_rotate_pages,
     pdf_set_page_boxes,

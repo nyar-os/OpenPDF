@@ -44,6 +44,7 @@ import type {
     SplitReport,
     StampReport,
     StampRequest,
+    SwapPagesReport,
 } from './types.js';
 
 const knownCodes = new Set<string>(errorCodes);
@@ -250,6 +251,17 @@ export function reversePages(
     selected: string | null = null,
 ): ReversePagesReport {
     return decode<ReversePagesReport>(() => binding('reversePages').pdf_reverse_pages(path, out, overwrite, selected));
+}
+
+/** Exchanges two equal-length page selections and keeps every other page in place. */
+export function swapPages(
+    path: string,
+    pages: string,
+    withPages: string,
+    out: string,
+    overwrite = false,
+): SwapPagesReport {
+    return decode<SwapPagesReport>(() => binding('swapPages').pdf_swap_pages(path, pages, withPages, out, overwrite));
 }
 
 /**

@@ -15,6 +15,7 @@ use open_pdf_core::{
     set_metadata,
     split_parts,
     set_page_boxes, split, stamp,
+    swap_pages,
 };
 use serde_json::json;
 
@@ -1195,6 +1196,28 @@ fn move_pages_relocates_a_selection_after_one_anchor() {
     assert_invalid(move_pages(&path, "2", 9, &workspace.path("bad.pdf"), true), "session/argument-invalid");
     assert_invalid(move_pages(&path, "2-3", 2, &workspace.path("bad-anchor.pdf"), true), "session/argument-invalid");
     assert_invalid(move_pages(&path, "1", 3, &out, false), "io/exists");
+}
+
+#[test]
+fn swap_pages_exchanges_two_selections_in_place() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three", "Four"]);
+    let out = workspace.path("swapped.pdf");
+
+    let report = swap_pages(&path, "1,3", "4,2", &out, false).expect("swap two selections");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["sourcePages"], json!(4));
+    assert_eq!(report["swapped"], json!([1, 3]));
+    assert_eq!(report["with"], json!([4, 2]));
+    let text = extract_text(&out).expect("extract swapped").markdown;
+    let positions = ["One", "Two", "Three", "Four"].map(|page| text.find(page).expect(page));
+    let [one, two, three, four] = positions;
+    assert!(four < three && three < two && two < one, "unexpected order: {text}");
+
+    assert_invalid(swap_pages(&path, "1", "2-3", &workspace.path("bad-length.pdf"), true), "session/argument-invalid");
+    assert_invalid(swap_pages(&path, "1-2", "2-3", &workspace.path("bad-overlap.pdf"), true), "session/argument-invalid");
+    assert_invalid(swap_pages(&path, "5", "1", &workspace.path("bad-page.pdf"), true), "session/argument-invalid");
+    assert_invalid(swap_pages(&path, "1", "2", &out, false), "io/exists");
 }
 
 #[test]

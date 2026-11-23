@@ -782,6 +782,48 @@ pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: b
     }))
 }
 
+/// Exchanges two equal-length page selections while every other page keeps its
+/// position.
+///
+/// Both selections expand the same way as [`reverse_pages`], must be the same
+/// length and must not share a page; the first page of `pages` trades places
+/// with the first of `with`, and so on. The output is replaced when it already
+/// exists only if `overwrite` is true.
+pub fn swap_pages(path: &Path, pages: &str, with: &str, out: &Path, overwrite: bool) -> Result<serde_json::Value, ServiceError> {
+    let total = document_pdf::inspect(path)?.pages;
+    let left = parse_page_ranges(pages, total)?;
+    let right = parse_page_ranges(with, total)?;
+    if left.len() != right.len() {
+        return Err(invalid_pages(format!(
+            "`pages` and `with` must select the same number of pages, got {} and {}",
+            left.len(),
+            right.len()
+        )));
+    }
+    if left.iter().any(|page| right.contains(page)) {
+        return Err(invalid_pages("`pages` and `with` must not share a page"));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    let mut order: Vec<usize> = (1..=total).collect();
+    for (source, target) in left.iter().zip(&right) {
+        order.swap(source - 1, target - 1);
+    }
+    let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
+    let arranged = document_pdf::arrange(path, out, &request)?;
+    Ok(json!({
+        "path": arranged.path,
+        "pages": arranged.pages,
+        "sourcePages": total,
+        "swapped": left,
+        "with": right,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
