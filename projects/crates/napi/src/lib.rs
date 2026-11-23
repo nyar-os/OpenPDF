@@ -98,7 +98,21 @@ fn pdf_merge(ctx: CallContext) -> Result<JsValue> {
     let inputs: Vec<String> =
         serde_json::from_str(&inputs_json).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
     let inputs: Vec<PathBuf> = inputs.into_iter().map(PathBuf::from).collect();
-    let report = open_pdf_core::merge(&inputs, std::path::Path::new(&out), overwrite, title.as_deref()).map_err(failure)?;
+    let selections_json = optional_text(&ctx, 4)?;
+    let selections: Option<Vec<String>> = match selections_json.as_deref() {
+        None | Some("") => None,
+        Some(json) => Some(
+            serde_json::from_str(json).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?,
+        ),
+    };
+    let report = open_pdf_core::merge_selected(
+        &inputs,
+        selections.as_deref(),
+        std::path::Path::new(&out),
+        overwrite,
+        title.as_deref(),
+    )
+    .map_err(failure)?;
     respond(&ctx, &report)
 }
 

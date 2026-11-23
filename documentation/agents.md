@@ -28,7 +28,7 @@ open-pdf open <file> [--print]
 open-pdf inspect <file> | --stdin
 open-pdf outline <file> [--depth <n>]
 open-pdf metadata <file>
-open-pdf merge <file...> -o <out> [--title <text>] [--overwrite]
+open-pdf merge <file...> -o <out> [--title <text>] [--pages <ranges>...] [--overwrite]
 open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count> | --parts <count>)
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
@@ -145,6 +145,7 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   `#RGB` or `#RRGGBB`. `{page}` and `{pages}` are substituted per page.
   `--pages` defaults to every page.
 - `--title` on `merge` replaces `/Title` in the output information dictionary.
+- `--pages` on `merge` is positional: repeat it once per input to keep only those one-based ranges from that file, e.g. `--pages 3,1 --pages 2-4`. Inputs past the last `--pages` keep every page. A selection that preserves the original order merges directly; any other order is projected first, so `3,1` writes page 3 before page 1.
 - `set-metadata` keeps a field's source value when the flag is omitted; an
   empty string removes the field.
 - `--name` on `extract-images --stdin` sets the output file stem and defaults to
@@ -171,7 +172,7 @@ Report shapes:
 | `inspect` | `{ label, version, pages, encrypted, metadata, pageSizes, bookmarks, formFields, warnings }` |
 | `outline` | `{ path, pages, count, maxDepth, bookmarks: [{ title, depth }] }` |
 | `metadata` | `{ path, pages, metadata }` |
-| `merge` | `{ path, pages, bytes }` |
+| `merge` | `{ path, pages, bytes, sources }`; each source reports `{ path, pages, selected, ranges }` |
 | `split` | `{ documents: [{ path, pages }] }` |
 | `split --parts` | `{ outDir, parts, pages, documents: [{ path, pages }] }` |
 | `arrange` | `{ path, pages }` |

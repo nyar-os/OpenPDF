@@ -9,7 +9,8 @@ use open_pdf_core::{
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_blank_pages, insert_pages,
-    merge, metadata, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata,
+    merge, merge_selected, metadata, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks,
+    set_metadata,
     split_parts,
     set_page_boxes, split, stamp,
 };
@@ -1665,3 +1666,65 @@ fn fill_form_rejects_empty_values_and_blank_field_names() {
     assert_invalid(fill_form(&path, &out, &blank), "session/argument-invalid");
 }
 
+
+#[test]
+fn merge_selected_keeps_only_the_requested_pages_per_input() {
+    let workspace = Workspace::new();
+    let first = workspace.create("first.pdf", Some("First"), &["AAA", "BBB", "CCC"]);
+    let second = workspace.create("second.pdf", Some("Second"), &["DDD", "EEE"]);
+    let merged = workspace.path("selected.pdf");
+
+    let report = merge_selected(
+        &[first, second],
+        Some(&["3,1".to_string()]),
+        &merged,
+        false,
+        None,
+    )
+    .expect("merge selections");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["sources"][0]["selected"], json!(2));
+    assert_eq!(report["sources"][0]["ranges"], json!("3,1"));
+    assert_eq!(report["sources"][1]["selected"], json!(2));
+    assert_eq!(report["sources"][1]["ranges"], json!(null));
+
+    let inspected = inspect(&merged).expect("inspect merged");
+    assert_eq!(inspected.pages, 4);
+    let extracted = extract_text(&merged).expect("extract merged").markdown;
+    let aaa = extracted.find("AAA").expect("AAA");
+    let ccc = extracted.find("CCC").expect("CCC");
+    let ddd = extracted.find("DDD").expect("DDD");
+    let eee = extracted.find("EEE").expect("EEE");
+    assert!(ccc < aaa && aaa < ddd && ddd < eee, "selection order is not preserved: {extracted}");
+    assert!(!extracted.contains("BBB"), "the dropped page is gone: {extracted}");
+}
+
+#[test]
+fn merge_selected_rejects_bad_ranges_and_existing_output() {
+    let workspace = Workspace::new();
+    let first = workspace.create("first.pdf", None, &["AAA", "BBB"]);
+    let merged = workspace.path("selected.pdf");
+
+    assert_invalid(
+        merge_selected(&[first.clone()], Some(&["3".into()]), &merged, false, None),
+        "session/argument-invalid",
+    );
+    assert_invalid(
+        merge_selected(&[first.clone()], Some(&["".into()]), &merged, false, None),
+        "session/argument-invalid",
+    );
+    assert_invalid(
+        merge_selected(&[first.clone()], Some(&["2-1".into()]), &merged, false, None),
+        "session/argument-invalid",
+    );
+    assert_invalid(
+        merge_selected(&[first.clone()], Some(&["1".into(), "2".into()]), &merged, false, None),
+        "session/argument-invalid",
+    );
+
+    fs::write(&merged, b"placeholder").expect("seed output");
+    assert_invalid(merge_selected(&[first], None, &merged, false, None), "io/exists");
+    let report = merge_selected(&[workspace.create("other.pdf", None, &["CCC"])], None, &merged, true, None)
+        .expect("overwrite replaces the output");
+    assert_eq!(report["pages"], json!(1));
+}

@@ -315,6 +315,80 @@ fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, Serv
     Ok(selected)
 }
 
+/// Merges inputs after removing pages outside each input's selection.
+///
+/// `selections` is positional: entry `i` is the one-based page ranges kept from
+/// input `i`, and inputs past the end of the list keep every page. A selection
+/// that leaves the document in its original order is merged directly; any other
+/// selection is projected through `split` first, so the output order follows the
+/// ranges (`3,1` writes page 3 before page 1). Ranges that are malformed, empty
+/// or outside their document fail with `session/argument-invalid` before the
+/// output is written, and an existing output is replaced only with `overwrite`.
+pub fn merge_selected(
+    inputs: &[PathBuf],
+    selections: Option<&[String]>,
+    out: &Path,
+    overwrite: bool,
+    title: Option<&str>,
+) -> Result<Value, ServiceError> {
+    if inputs.is_empty() {
+        return Err(invalid_pages("at least one input PDF is required"));
+    }
+    if let Some(selections) = selections
+        && selections.len() > inputs.len()
+    {
+        return Err(invalid_pages(format!(
+            "{} page selections were given for {} input(s)",
+            selections.len(),
+            inputs.len()
+        )));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    let scratch = temporary_path().with_extension("merge");
+    let outcome = (|| -> Result<(MergeReport, Vec<Value>), ServiceError> {
+        let mut paths = Vec::with_capacity(inputs.len());
+        let mut sources = Vec::with_capacity(inputs.len());
+        for (index, input) in inputs.iter().enumerate() {
+            let total = document_pdf::inspect(input)?.pages;
+            let ranges = selections.and_then(|selections| selections.get(index)).map(|ranges| ranges.trim());
+            let selected = match ranges {
+                Some(ranges) => parse_page_ranges(ranges, total)?,
+                None => (1..=total).collect(),
+            };
+            if selected.iter().copied().eq(1..=total) {
+                paths.push(input.clone());
+            }
+            else {
+                let directory = scratch.join(format!("source-{index}"));
+                let split = document_pdf::split(input, ranges.expect("a partial selection parses its ranges"), &directory)?;
+                paths.extend(split.documents.into_iter().map(|document| PathBuf::from(document.path)));
+            }
+            sources.push(json!({
+                "path": input.display().to_string(),
+                "pages": total,
+                "selected": selected.len(),
+                "ranges": ranges,
+            }));
+        }
+        let merged = document_pdf::merge(&paths, out, true, title)?;
+        Ok((merged, sources))
+    })();
+    let _ = fs::remove_dir_all(&scratch);
+    let (merged, sources) = outcome?;
+    let bytes = fs::metadata(out).map(|metadata| metadata.len()).unwrap_or(0);
+    Ok(json!({
+        "path": out.display().to_string(),
+        "pages": merged.pages,
+        "bytes": bytes,
+        "sources": sources,
+    }))
+}
+
 /// Repeats the selected pages directly after themselves.
 ///
 /// The document keeps its order; each selected page is written `times` times,

@@ -161,6 +161,24 @@ export interface MergeOptions {
     readonly overwrite?: boolean;
     /** Replaces `/Title` in the output information dictionary. */
     readonly title?: string;
+    /**
+     * One optional page selection per input, in the same order as `inputs`.
+     * Each entry accepts one-based pages and inclusive ranges such as `1,3-4`;
+     * inputs past the end of the list keep every page. A selection is rejected
+     * when it is empty, malformed, reversed or outside its document.
+     */
+    readonly pages?: readonly string[];
+}
+
+/** One merged input and the pages it contributed. */
+export interface MergeSource {
+    readonly path: string;
+    /** Page count of the input before selection. */
+    readonly pages: number;
+    /** Pages kept from the input. */
+    readonly selected: number;
+    /** The page ranges given for this input, or `null` when it kept every page. */
+    readonly ranges: string | null;
 }
 
 /** Result of `merge()`. */
@@ -168,6 +186,7 @@ export interface MergeReport {
     readonly path: string;
     readonly pages: number;
     readonly bytes: number;
+    readonly sources?: readonly MergeSource[];
 }
 
 /** One file produced by `split()`. */

@@ -300,10 +300,12 @@ cli
     .command('merge', 'cli.cmd.merge')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--title <title>', 'cli.opt.title')
+    .option('--pages <ranges>', 'cli.opt.merge-pages')
     .option('--overwrite', 'cli.opt.overwrite')
     .actionCtx(async (options, _args, ctx) => {
         const inputs = options._ ?? [];
         const out = text(options, 'out');
+        const pages = list(options, 'pages');
         if (inputs.length === 0) {
             ctx.fail('open-pdf.cli.inputs-required', { message: 'at least one input PDF is required' });
             return 2;
@@ -315,6 +317,7 @@ cli
         const report = await pdf.merge(inputs, out, {
             overwrite: flag(options, 'overwrite'),
             title: text(options, 'title'),
+            pages: pages.length === 0 ? undefined : pages,
         });
         ctx.emitResult(
             report,

@@ -106,7 +106,13 @@ export function metadata(path: string): PdfMetadataReport {
 /** Concatenates PDF files in the given order. */
 export function merge(inputs: readonly string[], out: string, options: MergeOptions = {}): MergeReport {
     return decode<MergeReport>(() =>
-        binding('merge').pdf_merge(JSON.stringify(inputs), out, options.overwrite ?? false, options.title ?? ''),
+        binding('merge').pdf_merge(
+            JSON.stringify(inputs),
+            out,
+            options.overwrite ?? false,
+            options.title ?? '',
+            options.pages === undefined ? '' : JSON.stringify(options.pages),
+        ),
     );
 }
 

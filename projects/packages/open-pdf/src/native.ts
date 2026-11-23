@@ -17,7 +17,7 @@ export interface NativeBinding {
     pdf_inspect(path: string): string;
     pdf_outline(path: string): string;
     pdf_metadata(path: string): string;
-    pdf_merge(inputsJson: string, out: string, overwrite: boolean, title: string): string;
+    pdf_merge(inputsJson: string, out: string, overwrite: boolean, title: string, selectionsJson: string): string;
     pdf_split(path: string, ranges: string, outDir: string): string;
     pdf_split_every(path: string, every: number, outDir: string): string;
     pdf_split_parts(path: string, parts: number, outDir: string): string;

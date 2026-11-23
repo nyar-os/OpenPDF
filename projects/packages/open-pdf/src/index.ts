@@ -92,7 +92,11 @@ export class OpenPDF {
 
     /** Concatenates PDF files in the given order. */
     async merge(inputs: readonly string[], out: string, options: MergeOptions = {}): Promise<MergeReport> {
-        return service.merge(inputs, out, { overwrite: options.overwrite ?? this.defaultOverwrite, title: options.title });
+        return service.merge(inputs, out, {
+            overwrite: options.overwrite ?? this.defaultOverwrite,
+            title: options.title,
+            pages: options.pages,
+        });
     }
 
     /** Splits one PDF into files selected by 1-based ranges. */
