@@ -62,6 +62,7 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.splitEvery('input.pdf', 2, 'out'),
         () => OpenPDF.arrange('input.pdf', 'out.pdf', { order: [1] }),
         () => OpenPDF.deletePages('input.pdf', '1', 'out.pdf'),
+        () => OpenPDF.insertPages('input.pdf', 'extra.pdf', 1, 'out.pdf'),
         () => OpenPDF.rotatePages('input.pdf', '1', 90, 'out.pdf'),
         () => OpenPDF.setPageBoxes('input.pdf', '1', [0, 0, 10, 10], 'out.pdf'),
         () => OpenPDF.setMetadata('input.pdf', 'out.pdf', { title: 'x' }),
@@ -106,6 +107,25 @@ test('deletePages drops the selected pages', { skip: withoutAddon }, async () =>
         assert.equal(report.removed, 1);
         assert.ok(report.bytes > 0);
         assert.equal(OpenPDF.inspect(out).pages, 2);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('insertPages places the other document after the selected page', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const extra = path.join(dir, 'extra.pdf');
+        const out = path.join(dir, 'inserted.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two', 'Three'], overwrite: true });
+        await OpenPDF.create({ out: extra, pages: ['Alpha'], overwrite: true });
+        const report = await OpenPDF.insertPages(source, extra, 1, out);
+        assert.equal(report.pages, 4);
+        assert.equal(report.sourcePages, 3);
+        assert.equal(report.insertedPages, 1);
+        assert.equal(report.after, 1);
+        assert.equal(OpenPDF.inspect(out).pages, 4);
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

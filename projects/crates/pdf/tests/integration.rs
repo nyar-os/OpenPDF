@@ -8,6 +8,7 @@ use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
+    insert_pages,
     merge, outline, rotate_pages, search, search_pages, set_bookmarks, set_metadata, set_page_boxes, split, stamp,
 };
 use serde_json::json;
@@ -876,6 +877,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["setMetadata"], "supported");
     assert_eq!(matrix["operations"]["fillForm"], "supported");
     assert_eq!(matrix["operations"]["deletePages"], "supported");
+    assert_eq!(matrix["operations"]["insertPages"], "supported");
     assert_eq!(matrix["operations"]["rotatePages"], "supported");
     assert_eq!(matrix["operations"]["setPageBoxes"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
@@ -976,6 +978,37 @@ fn duplicate_pages_repeats_the_selection_in_place() {
     assert_invalid(duplicate_pages(&path, "1", 2, &out, false), "io/exists");
     assert_invalid(duplicate_pages(&path, "1", 1, &workspace.path("times.pdf"), true), "session/argument-invalid");
     assert_invalid(duplicate_pages(&path, "9", 2, &workspace.path("range.pdf"), true), "session/argument-invalid");
+}
+
+#[test]
+fn insert_pages_places_the_other_document_after_the_selected_page() {
+    let workspace = Workspace::new();
+    let target = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
+    let insert = workspace.create("extra.pdf", None, &["Alpha", "Beta"]);
+    let out = workspace.path("inserted.pdf");
+
+    let report = insert_pages(&target, &insert, 1, &out, false).expect("insert pages");
+    assert_eq!(report["pages"], json!(5));
+    assert_eq!(report["sourcePages"], json!(3));
+    assert_eq!(report["insertedPages"], json!(2));
+    assert_eq!(report["after"], json!(1));
+    assert_eq!(report["path"].as_str(), Some(out.display().to_string().as_str()));
+
+    let text = extract_text(&out).expect("extract inserted").markdown;
+    let one = text.find("One").expect("One");
+    let alpha = text.find("Alpha").expect("Alpha");
+    let beta = text.find("Beta").expect("Beta");
+    let two = text.find("Two").expect("Two");
+    let three = text.find("Three").expect("Three");
+    assert!(one < alpha && alpha < beta && beta < two && two < three, "unexpected order: {text}");
+
+    let front = workspace.path("front.pdf");
+    insert_pages(&target, &insert, 0, &front, false).expect("insert before the first page");
+    let text = extract_text(&front).expect("extract front").markdown;
+    assert!(text.find("Alpha").expect("Alpha") < text.find("One").expect("One"), "unexpected order: {text}");
+
+    assert_invalid(insert_pages(&target, &insert, 4, &out, false), "session/argument-invalid");
+    assert_invalid(insert_pages(&target, &insert, 1, &out, false), "io/exists");
 }
 
 #[test]

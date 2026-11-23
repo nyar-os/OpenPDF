@@ -22,6 +22,7 @@ export interface NativeBinding {
     pdf_arrange(path: string, out: string, opsJson: string): string;
     pdf_delete_pages(path: string, pages: string, out: string, overwrite: boolean): string;
     pdf_duplicate_pages(path: string, pages: string, times: number, out: string, overwrite: boolean): string;
+    pdf_insert_pages(path: string, insert: string, after: number, out: string, overwrite: boolean): string;
     pdf_rotate_pages(path: string, pages: string, degrees: number, out: string, overwrite: boolean): string;
     pdf_set_page_boxes(path: string, pages: string, cropJson: string, out: string, overwrite: boolean): string;
     pdf_set_metadata(path: string, out: string, patchJson: string): string;

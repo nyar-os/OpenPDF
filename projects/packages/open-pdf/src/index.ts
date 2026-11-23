@@ -24,6 +24,7 @@ import type {
     ExtractReport,
     FormFillReport,
     FormValue,
+    InsertPagesReport,
     KeepPagesReport,
     MergeOptions,
     MergeReport,
@@ -114,6 +115,17 @@ export class OpenPDF {
         overwrite = this.defaultOverwrite,
     ): Promise<DuplicatePagesReport> {
         return service.duplicatePages(path, pages, times, out, overwrite);
+    }
+
+    /** Inserts every page of `insert` after the one-based target page `after`. */
+    async insertPages(
+        path: string,
+        insert: string,
+        after: number,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<InsertPagesReport> {
+        return service.insertPages(path, insert, after, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */
@@ -292,6 +304,17 @@ export class OpenPDF {
         overwrite = false,
     ): DuplicatePagesReport {
         return service.duplicatePages(path, pages, times, out, overwrite);
+    }
+
+    /** Inserts every page of `insert` after the one-based target page `after`. */
+    static insertPages(
+        path: string,
+        insert: string,
+        after: number,
+        out: string,
+        overwrite = false,
+    ): InsertPagesReport {
+        return service.insertPages(path, insert, after, out, overwrite);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */

@@ -57,8 +57,8 @@ lists every command, flag and report shape.
 ## ✨ Highlights
 
 - **Page-level editing, not re-rendering.** Merge, split, keep or delete ranges,
-  reorder, rotate and crop existing pages; page content and resources are copied,
-  not rasterized.
+  duplicate or insert pages from another document, reorder, rotate and crop
+  existing pages; page content and resources are copied, not rasterized.
 - **Inspect what is really there.** Version, page count and geometry, document
   metadata, bookmarks and AcroForm fields, including files that use
   cross-reference streams and object streams.
@@ -102,6 +102,7 @@ Each task maps to one command. Replace the sample names with your own files.
 | Split every N pages | `open-pdf split combined.pdf --every 10 --out-dir pages/` |
 | Keep only selected pages | `open-pdf extract-pages combined.pdf --pages 1-3,5 -o excerpt.pdf` |
 | Delete selected pages | `open-pdf delete-pages combined.pdf --pages 2,7-9 -o trimmed.pdf` |
+| Insert pages from another PDF | `open-pdf insert-pages combined.pdf --insert extra.pdf --after 3 -o spliced.pdf` |
 | Reorder, remove and rotate | `open-pdf arrange combined.pdf -o ordered.pdf --order 3,1,2 --remove 4 --rotate 90` |
 | Rotate selected pages | `open-pdf rotate combined.pdf --pages 1-2 --degrees 180 -o rotated.pdf` |
 | Set a CropBox | `open-pdf set-page-boxes combined.pdf --pages 1 --box 18,36,594,756 -o cropped.pdf` |

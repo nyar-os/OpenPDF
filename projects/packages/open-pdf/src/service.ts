@@ -24,6 +24,7 @@ import type {
     ExtractReport,
     FormFillReport,
     FormValue,
+    InsertPagesReport,
     KeepPagesReport,
     MergeOptions,
     MergeReport,
@@ -147,6 +148,24 @@ export function duplicatePages(
 ): DuplicatePagesReport {
     return decode<DuplicatePagesReport>(() =>
         binding('duplicatePages').pdf_duplicate_pages(path, pages, times, out, overwrite),
+    );
+}
+
+/**
+ * Inserts every page of `insert` after the selected page of `path`.
+ *
+ * `after` is the one-based target page the inserted pages follow; `0` puts
+ * them before the first page and `pages` appends them at the end.
+ */
+export function insertPages(
+    path: string,
+    insert: string,
+    after: number,
+    out: string,
+    overwrite = false,
+): InsertPagesReport {
+    return decode<InsertPagesReport>(() =>
+        binding('insertPages').pdf_insert_pages(path, insert, after, out, overwrite),
     );
 }
 

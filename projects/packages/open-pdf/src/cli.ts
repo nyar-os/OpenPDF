@@ -448,6 +448,42 @@ cli
     });
 
 cli
+    .command('insert-pages', 'cli.cmd.insert-pages')
+    .option('--insert <file>', 'cli.opt.insert')
+    .option('--after <page>', 'cli.opt.after')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const insert = text(options, 'insert');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (insert === undefined || insert.length === 0) {
+            ctx.fail('open-pdf.cli.insert-args', { message: '`--insert <file>` is required' });
+            return 2;
+        }
+        const afterText = text(options, 'after');
+        const after = afterText === undefined ? Number.NaN : Number(afterText);
+        if (!Number.isSafeInteger(after) || after < 0) {
+            ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
+            return 2;
+        }
+        const report = await pdf.insertPages(file, insert, after, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `inserted ${report.path} pages=${report.pages} after=${report.after} insertedPages=${report.insertedPages}`,
+        );
+        return 0;
+    });
+
+cli
     .command('extract-pages', 'cli.cmd.extract-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')

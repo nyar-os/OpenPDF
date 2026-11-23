@@ -157,6 +157,27 @@ fn pdf_duplicate_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Inserts every page of one PDF after the selected page of another PDF.
+#[function]
+fn pdf_insert_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let insert = text(&ctx, 1)?;
+    let after = argument(&ctx, 2)?.as_i64()?;
+    let after =
+        u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
+    let out = text(&ctx, 3)?;
+    let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::insert_pages(
+        std::path::Path::new(&path),
+        std::path::Path::new(&insert),
+        after,
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Adds a clockwise rotation to the selected pages of one PDF file.
 #[function]
 fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
@@ -404,6 +425,7 @@ register_module![
     pdf_arrange,
     pdf_delete_pages,
     pdf_duplicate_pages,
+    pdf_insert_pages,
     pdf_rotate_pages,
     pdf_set_page_boxes,
     pdf_set_metadata,

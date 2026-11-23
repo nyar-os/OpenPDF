@@ -117,6 +117,8 @@ export interface PdfCapabilities {
         readonly split: SupportLevel;
         readonly arrange: SupportLevel;
         readonly deletePages: SupportLevel;
+        readonly duplicatePages: SupportLevel;
+        readonly insertPages: SupportLevel;
         readonly rotatePages: SupportLevel;
         readonly setPageBoxes: SupportLevel;
         readonly setMetadata: SupportLevel;
@@ -197,6 +199,21 @@ export interface DuplicatePagesReport {
     readonly duplicated: readonly number[];
     /** Copies written for each selected page. */
     readonly times: number;
+}
+
+/** Result of `insertPages()`. */
+export interface InsertPagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the target document. */
+    readonly sourcePages: number;
+    /** Pages taken from the inserted document. */
+    readonly insertedPages: number;
+    /** The inserted document. */
+    readonly insert: string;
+    /** One-based target page the inserted pages follow; `0` means first. */
+    readonly after: number;
 }
 
 /** Result of `deletePages()`. */

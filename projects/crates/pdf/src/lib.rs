@@ -355,6 +355,59 @@ pub fn duplicate_pages(
     }))
 }
 
+/// Inserts every page of another PDF after the selected page of one PDF.
+///
+/// `after` is the one-based page of `path` after which the pages of `insert`
+/// are placed; `0` puts them before the first page and `pages` appends them at
+/// the end. The output is replaced when it already exists only if `overwrite`
+/// is true.
+pub fn insert_pages(
+    path: &Path,
+    insert: &Path,
+    after: u32,
+    out: &Path,
+    overwrite: bool,
+) -> Result<serde_json::Value, ServiceError> {
+    let total = document_pdf::inspect(path)?.pages;
+    let inserted = document_pdf::inspect(insert)?.pages;
+    if after as usize > total {
+        return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    // `arrange` cannot reach across documents, so split both files into
+    // one-page parts and merge the interleaved sequence back in order.
+    let target_scratch = temporary_path().with_extension("ins-a");
+    let insert_scratch = temporary_path().with_extension("ins-b");
+    let outcome = (|| {
+        let target = document_pdf::split_every(path, 1, &target_scratch)?;
+        let parts = document_pdf::split_every(insert, 1, &insert_scratch)?;
+        if target.documents.len() != total || parts.documents.len() != inserted {
+            return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
+        }
+        let mut inputs = Vec::with_capacity(total + inserted);
+        inputs.extend(target.documents.iter().take(after as usize).map(|part| PathBuf::from(&part.path)));
+        inputs.extend(parts.documents.iter().map(|part| PathBuf::from(&part.path)));
+        inputs.extend(target.documents.iter().skip(after as usize).map(|part| PathBuf::from(&part.path)));
+        document_pdf::merge(&inputs, out, true, None)
+    })();
+    let _ = fs::remove_dir_all(&target_scratch);
+    let _ = fs::remove_dir_all(&insert_scratch);
+    let merged = outcome?;
+    Ok(json!({
+        "path": merged.path,
+        "pages": merged.pages,
+        "sourcePages": total,
+        "insertedPages": inserted,
+        "insert": insert.display().to_string(),
+        "after": after,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -413,6 +466,7 @@ pub fn capabilities() -> serde_json::Value {
             "arrange": "supported",
             "deletePages": "supported",
             "duplicatePages": "supported",
+            "insertPages": "supported",
             "rotatePages": "supported",
             "setPageBoxes": "supported",
             "setMetadata": "supported",
