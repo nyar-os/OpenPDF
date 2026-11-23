@@ -188,8 +188,14 @@ export class OpenPDF {
     ): Promise<MovePagesReport> {
         return service.movePages(path, pages, after, out, overwrite);
     }
-    async reversePages(path: string, out: string, overwrite = this.defaultOverwrite): Promise<ReversePagesReport> {
-        return service.reversePages(path, out, overwrite);
+    /** Reverses every page, or only the selected one-based pages. */
+    async reversePages(
+        path: string,
+        out: string,
+        overwrite = this.defaultOverwrite,
+        selected: string | null = null,
+    ): Promise<ReversePagesReport> {
+        return service.reversePages(path, out, overwrite, selected);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */
@@ -426,8 +432,14 @@ export class OpenPDF {
     static movePages(path: string, pages: string, after: number, out: string, overwrite = false): MovePagesReport {
         return service.movePages(path, pages, after, out, overwrite);
     }
-    static reversePages(path: string, out: string, overwrite = false): ReversePagesReport {
-        return service.reversePages(path, out, overwrite);
+    /** Reverses every page, or only the selected one-based pages. */
+    static reversePages(
+        path: string,
+        out: string,
+        overwrite = false,
+        selected: string | null = null,
+    ): ReversePagesReport {
+        return service.reversePages(path, out, overwrite, selected);
     }
 
     /** Keeps only the selected pages, in source order, into a new PDF. */

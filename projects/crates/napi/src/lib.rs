@@ -282,8 +282,14 @@ fn pdf_reverse_pages(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
     let out = text(&ctx, 1)?;
     let overwrite = ctx.args().get(2).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
-    let report =
-        open_pdf_core::reverse_pages(std::path::Path::new(&path), std::path::Path::new(&out), overwrite).map_err(failure)?;
+    let selected = optional_text(&ctx, 3)?;
+    let report = open_pdf_core::reverse_pages(
+        std::path::Path::new(&path),
+        std::path::Path::new(&out),
+        overwrite,
+        selected.as_deref(),
+    )
+    .map_err(failure)?;
     respond(&ctx, &report)
 }
 

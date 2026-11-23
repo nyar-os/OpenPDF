@@ -283,6 +283,8 @@ export interface ReplacePagesReport {
     readonly selectedPages: readonly number[];
     /** The replacement document. */
     readonly insert: string;
+    /** One-based pages reversed; every page when no selection was given. */
+    readonly reversed: readonly number[];
 }
 
 /** Result of `movePages()`. */

@@ -615,6 +615,7 @@ cli
 
 cli
     .command('reverse-pages', 'cli.cmd.reverse-pages')
+    .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--overwrite', 'cli.opt.overwrite')
     .actionCtx(async (options, _args, ctx) => {
@@ -628,7 +629,14 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = await pdf.reversePages(file, out, flag(options, 'overwrite'));
+        const pages = pageRanges(options, 'pages');
+        if (pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        const report = await pdf.reversePages(file, out, flag(options, 'overwrite'), pages ?? null);
         ctx.emitResult(report, `reversed ${report.path} pages=${report.pages}`);
         return 0;
     });

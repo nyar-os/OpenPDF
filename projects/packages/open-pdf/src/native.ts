@@ -48,7 +48,7 @@ export interface NativeBinding {
         overwrite: boolean,
         selected: string | null,
     ): string;
-    pdf_reverse_pages(path: string, out: string, overwrite: boolean): string;
+    pdf_reverse_pages(path: string, out: string, overwrite: boolean, selected: string | null): string;
     pdf_move_pages(path: string, pages: string, after: number, out: string, overwrite: boolean): string;
     pdf_rotate_pages(path: string, pages: string, degrees: number, out: string, overwrite: boolean): string;
     pdf_set_page_boxes(path: string, pages: string, cropJson: string, out: string, overwrite: boolean): string;

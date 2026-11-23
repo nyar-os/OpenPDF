@@ -242,8 +242,14 @@ export function movePages(path: string, pages: string, after: number, out: strin
     return decode<MovePagesReport>(() => binding('movePages').pdf_move_pages(path, pages, after, out, overwrite));
 }
 
-export function reversePages(path: string, out: string, overwrite = false): ReversePagesReport {
-    return decode<ReversePagesReport>(() => binding('reversePages').pdf_reverse_pages(path, out, overwrite));
+/** Reverses the order of every page, or only the selected one-based pages. */
+export function reversePages(
+    path: string,
+    out: string,
+    overwrite = false,
+    selected: string | null = null,
+): ReversePagesReport {
+    return decode<ReversePagesReport>(() => binding('reversePages').pdf_reverse_pages(path, out, overwrite, selected));
 }
 
 /**

@@ -699,11 +699,17 @@ pub fn replace_pages(
     }))
 }
 
-/// Reverses the page order of one PDF into a new document.
+/// Reverses the page order, or only the selected pages, into a new PDF.
 ///
-/// The last page becomes the first; page content is copied, not rewritten.
-/// The output is replaced when it already exists only if `overwrite` is true.
-pub fn reverse_pages(path: &Path, out: &Path, overwrite: bool) -> Result<serde_json::Value, ServiceError> {
+/// `selected` is an optional one-based range list; those pages trade places in
+/// place while every other page keeps its position. The output is replaced when
+/// it already exists only if `overwrite` is true.
+pub fn reverse_pages(
+    path: &Path,
+    out: &Path,
+    overwrite: bool,
+    selected: Option<&str>,
+) -> Result<serde_json::Value, ServiceError> {
     let total = document_pdf::inspect(path)?.pages;
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
@@ -711,13 +717,22 @@ pub fn reverse_pages(path: &Path, out: &Path, overwrite: bool) -> Result<serde_j
             format!("{} already exists; pass overwrite to replace it", out.display()),
         ));
     }
-    let order: Vec<usize> = (1..=total).rev().collect();
+    let reversed = match selected {
+        Some(ranges) => parse_page_ranges(ranges, total)?,
+        None => (1..=total).collect(),
+    };
+    let mut order: Vec<usize> = (1..=total).collect();
+    let flipped = reversed.iter().rev().copied().collect::<Vec<_>>();
+    for (position, page) in reversed.iter().enumerate() {
+        order[page - 1] = flipped[position];
+    }
     let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
     let arranged = document_pdf::arrange(path, out, &request)?;
     Ok(json!({
         "path": arranged.path,
         "pages": arranged.pages,
         "sourcePages": total,
+        "reversed": reversed,
     }))
 }
 

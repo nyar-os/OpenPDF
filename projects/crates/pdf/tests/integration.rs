@@ -1143,9 +1143,10 @@ fn reverse_pages_flips_the_document_order() {
     let path = workspace.create("deck.pdf", None, &["One", "Two", "Three"]);
     let out = workspace.path("reversed.pdf");
 
-    let report = reverse_pages(&path, &out, false).expect("reverse pages");
+    let report = reverse_pages(&path, &out, false, None).expect("reverse pages");
     assert_eq!(report["pages"], json!(3));
     assert_eq!(report["sourcePages"], json!(3));
+    assert_eq!(report["reversed"], json!([1, 2, 3]));
     assert_eq!(report["path"].as_str(), Some(out.display().to_string().as_str()));
 
     let text = extract_text(&out).expect("extract reversed").markdown;
@@ -1154,7 +1155,18 @@ fn reverse_pages_flips_the_document_order() {
     let one = text.find("One").expect("One");
     assert!(three < two && two < one, "unexpected order: {text}");
 
-    assert_invalid(reverse_pages(&path, &out, false), "io/exists");
+    // Only the selected pages trade places; the unselected page keeps its spot.
+    let middle = workspace.path("middle.pdf");
+    let report = reverse_pages(&path, &middle, false, Some("1,2")).expect("reverse the first two pages");
+    assert_eq!(report["reversed"], json!([1, 2]));
+    let text = extract_text(&middle).expect("extract middle").markdown;
+    let two = text.find("Two").expect("Two");
+    let one = text.find("One").expect("One");
+    let three = text.find("Three").expect("Three");
+    assert!(two < one && one < three, "unexpected order: {text}");
+
+    assert_invalid(reverse_pages(&path, &middle, true, Some("9")), "session/argument-invalid");
+    assert_invalid(reverse_pages(&path, &out, false, None), "io/exists");
 }
 
 #[test]
