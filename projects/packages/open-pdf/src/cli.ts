@@ -532,6 +532,7 @@ cli
 cli
     .command('insert-blank-pages', 'cli.cmd.insert-blank-pages')
     .option('--after <page>', 'cli.opt.after')
+    .option('--before <page>', 'cli.opt.before')
     .option('--count <count>', 'cli.opt.count')
     .option('--size <size>', 'cli.opt.blank-size')
     .option('-o, --out <file>', 'cli.opt.out')
@@ -548,10 +549,23 @@ cli
             return 2;
         }
         const afterText = text(options, 'after');
-        const after = afterText === undefined ? 0 : Number(afterText);
+        const beforeText = text(options, 'before');
+        if (afterText !== undefined && beforeText !== undefined) {
+            ctx.fail('open-pdf.cli.after-args', { message: '`--after` and `--before` are mutually exclusive' });
+            return 2;
+        }
+        let after = afterText === undefined ? 0 : Number(afterText);
         if (!Number.isSafeInteger(after) || after < 0) {
             ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
             return 2;
+        }
+        if (beforeText !== undefined) {
+            const before = Number(beforeText);
+            if (!Number.isSafeInteger(before) || before < 1) {
+                ctx.fail('open-pdf.cli.after-args', { message: '`--before <page>` must be a positive integer' });
+                return 2;
+            }
+            after = before - 1;
         }
         const countText = text(options, 'count');
         const count = countText === undefined ? 1 : Number(countText);

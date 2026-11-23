@@ -34,7 +34,7 @@ open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <d
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
 open-pdf insert-pages <file> --insert <file> --after <page> [--pages <ranges>] -o <out> [--overwrite]
-open-pdf insert-blank-pages <file> --after <page> [--count <count>] [--size <size>] -o <out> [--overwrite]
+open-pdf insert-blank-pages <file> (--after <page> | --before <page>) [--count <count>] [--size <size>] -o <out> [--overwrite]
 open-pdf replace-pages <file> --pages <list> --insert <file> [--source-pages <ranges>] -o <out> [--overwrite]
 open-pdf reverse-pages <file> [--pages <list>] -o <out> [--overwrite]
 open-pdf swap-pages <file> --pages <list> --with <list> -o <out> [--overwrite]
@@ -119,7 +119,10 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   removed and the replacement pages take the position of the first removed
   page. `--source-pages` on `replace-pages` optionally selects one-based pages
   of `--insert` in that order; without it every page is used.
-  `--count` on `insert-blank-pages` is `1`-`100` and defaults to `1`;
+  `--count` on `insert-blank-pages` is `1`-`100` and defaults to `1`; its
+  `--after` and `--before` are mutually exclusive, `--after 0` and
+  `--before 1` both put the blanks before the first page, and the report shows
+  the resolved `after` anchor.
   `--size` accepts the same names as `create --page-size`, and without it the
   blanks take the geometry of the source's first page.
   page, so the page count changes by `replacementPages - removed`.
