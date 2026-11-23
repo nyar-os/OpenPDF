@@ -12,7 +12,7 @@
             "arrange": "Reorder, remove and rotate pages into a new PDF",
             "delete-pages": "Remove the selected pages into a new PDF",
             "duplicate-pages": "Repeat the selected pages directly after themselves",
-            "insert-pages": "Insert every page of another PDF after a selected page",
+            "insert-pages": "Insert every page of another PDF after or before a selected page",
             "insert-blank-pages": "Insert blank pages after or before a selected page",
             "replace-pages": "Replace the selected pages with pages of another PDF",
             "reverse-pages": "Reverse the page order into a new PDF",

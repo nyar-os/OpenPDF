@@ -33,7 +33,7 @@ open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count> | --parts 
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
-open-pdf insert-pages <file> --insert <file> --after <page> [--pages <ranges>] -o <out> [--overwrite]
+open-pdf insert-pages <file> --insert <file> (--after <page> | --before <page>) [--pages <ranges>] -o <out> [--overwrite]
 open-pdf insert-blank-pages <file> (--after <page> | --before <page>) [--count <count>] [--size <size>] -o <out> [--overwrite]
 open-pdf replace-pages <file> --pages <list> --insert <file> [--source-pages <ranges>] -o <out> [--overwrite]
 open-pdf reverse-pages <file> [--pages <list>] -o <out> [--overwrite]
@@ -115,7 +115,11 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   used. On `insert-pages` `--pages` optionally selects one-based source pages
   (e.g. `3,1`) and inserts them in that order; without it every page is used.
   `--after` is the one-based page of the target the inserted pages follow; `0`
-  puts them before the first page and the target page count appends them. On `replace-pages` the pages named by `--pages` are
+  puts them before the first page and the target page count appends them.
+  `--after` and `--before` are mutually exclusive; `--before` is a one-based
+  page and inserts the pages in front of it, and the `after` field in the
+  report is the resolved zero-based insertion point.
+  On `replace-pages` the pages named by `--pages` are
   removed and the replacement pages take the position of the first removed
   page. `--source-pages` on `replace-pages` optionally selects one-based pages
   of `--insert` in that order; without it every page is used.

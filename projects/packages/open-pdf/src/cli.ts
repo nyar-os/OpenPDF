@@ -489,6 +489,7 @@ cli
     .command('insert-pages', 'cli.cmd.insert-pages')
     .option('--insert <file>', 'cli.opt.insert')
     .option('--after <page>', 'cli.opt.after')
+    .option('--before <page>', 'cli.opt.before')
     .option('--pages <ranges>', 'cli.opt.insert-pages')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--overwrite', 'cli.opt.overwrite')
@@ -509,10 +510,23 @@ cli
             return 2;
         }
         const afterText = text(options, 'after');
-        const after = afterText === undefined ? Number.NaN : Number(afterText);
+        const beforeText = text(options, 'before');
+        if (afterText !== undefined && beforeText !== undefined) {
+            ctx.fail('open-pdf.cli.after-args', { message: '`--after` and `--before` are mutually exclusive' });
+            return 2;
+        }
+        let after = afterText === undefined ? 0 : Number(afterText);
         if (!Number.isSafeInteger(after) || after < 0) {
             ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
             return 2;
+        }
+        if (beforeText !== undefined) {
+            const before = Number(beforeText);
+            if (!Number.isSafeInteger(before) || before < 1) {
+                ctx.fail('open-pdf.cli.after-args', { message: '`--before <page>` must be a positive integer' });
+                return 2;
+            }
+            after = before - 1;
         }
         const report = await pdf.insertPages(
             file,
@@ -524,7 +538,7 @@ cli
         );
         ctx.emitResult(
             report,
-            `inserted ${report.path} pages=${report.pages} after=${report.after} insertedPages=${report.insertedPages}`,
+            `inserted ${report.path} pages=${report.pages} at=${report.after} insertedPages=${report.insertedPages}`,
         );
         return 0;
     });
@@ -716,7 +730,7 @@ cli
             ctx.fail('open-pdf.cli.after-args', { message: '`--after` and `--before` are mutually exclusive' });
             return 2;
         }
-        let after = afterText === undefined ? Number.NaN : Number(afterText);
+        let after = afterText === undefined ? 0 : Number(afterText);
         if (!Number.isSafeInteger(after) || after < 0) {
             ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
             return 2;
