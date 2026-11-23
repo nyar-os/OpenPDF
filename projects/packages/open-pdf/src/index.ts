@@ -24,6 +24,7 @@ import type {
     ExtractReport,
     FormFillReport,
     FormValue,
+    InsertBlankPagesReport,
     InsertPagesReport,
     KeepPagesReport,
     MergeOptions,
@@ -134,6 +135,23 @@ export class OpenPDF {
         overwrite = this.defaultOverwrite,
     ): Promise<InsertPagesReport> {
         return service.insertPages(path, insert, after, out, overwrite);
+    }
+
+    /**
+     * Inserts `count` blank pages after the one-based target page `after`.
+     *
+     * `size` is a named paper size or `WIDTHxHEIGHT` in points; when omitted the
+     * blanks take the geometry of the source's first page.
+     */
+    async insertBlankPages(
+        path: string,
+        after: number,
+        count: number,
+        size: string | undefined,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<InsertBlankPagesReport> {
+        return service.insertBlankPages(path, after, count, size, out, overwrite);
     }
 
     /** Replaces the selected pages with every page of `insert`. */
@@ -344,6 +362,18 @@ export class OpenPDF {
         overwrite = false,
     ): InsertPagesReport {
         return service.insertPages(path, insert, after, out, overwrite);
+    }
+
+    /** Inserts blank pages after the one-based target page `after`. */
+    static insertBlankPages(
+        path: string,
+        after: number,
+        count: number,
+        size: string | undefined,
+        out: string,
+        overwrite = false,
+    ): InsertBlankPagesReport {
+        return service.insertBlankPages(path, after, count, size, out, overwrite);
     }
 
     /** Replaces the selected pages with every page of `insert`. */

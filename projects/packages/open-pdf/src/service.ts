@@ -24,6 +24,7 @@ import type {
     ExtractReport,
     FormFillReport,
     FormValue,
+    InsertBlankPagesReport,
     InsertPagesReport,
     KeepPagesReport,
     MergeOptions,
@@ -174,6 +175,26 @@ export function insertPages(
 ): InsertPagesReport {
     return decode<InsertPagesReport>(() =>
         binding('insertPages').pdf_insert_pages(path, insert, after, out, overwrite),
+    );
+}
+
+/**
+ * Inserts `count` blank pages after the one-based target page `after`.
+ *
+ * `after: 0` puts the blanks before the first page and `after: pages` appends
+ * them. `size` is a named paper size or `WIDTHxHEIGHT` in points; when omitted
+ * the blanks take the geometry of the source's first page.
+ */
+export function insertBlankPages(
+    path: string,
+    after: number,
+    count: number,
+    size: string | undefined,
+    out: string,
+    overwrite = false,
+): InsertBlankPagesReport {
+    return decode<InsertBlankPagesReport>(() =>
+        binding('insertBlankPages').pdf_insert_blank_pages(path, after, count, size, out, overwrite),
     );
 }
 

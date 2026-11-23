@@ -421,6 +421,69 @@ pub fn insert_pages(
     }))
 }
 
+/// Inserts `count` blank pages after a page of one PDF.
+///
+/// `after` is the one-based page the blanks follow; `0` puts them before the
+/// first page and `pages` appends them at the end. When `size` is absent the
+/// blank pages take the geometry of the source's first page, so an insertion
+/// keeps the document's paper. The output is replaced when it already exists
+/// only if `overwrite` is true.
+pub fn insert_blank_pages(
+    path: &Path,
+    after: u32,
+    count: u32,
+    size: Option<&str>,
+    out: &Path,
+    overwrite: bool,
+) -> Result<serde_json::Value, ServiceError> {
+    let report = document_pdf::inspect(path)?;
+    let total = report.pages;
+    if after as usize > total {
+        return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
+    }
+    if !(1..=100).contains(&count) {
+        return Err(invalid_pages("`count` must be between 1 and 100"));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    // A blank page is a page whose text is empty; `create` still writes the
+    // MediaBox, so the inserted pages keep a real size.
+    let page_size = size.map(str::to_owned).or_else(|| {
+        report.page_sizes.first().map(|page| format!("{}x{}", page.width_pt, page.height_pt))
+    });
+    let scratch = temporary_path().with_extension("blank.pdf");
+    let created = document_pdf::create(&CreateRequest {
+        out: scratch.clone(),
+        title: None,
+        pages: vec![String::new(); count as usize],
+        overwrite: true,
+        page_size,
+        font: None,
+        font_size: None,
+        margin_pt: None,
+        align: None,
+        author: None,
+        subject: None,
+        keywords: None,
+        creator: None,
+        page_numbers: None,
+    });
+    let outcome = created.and_then(|_| insert_pages(path, &scratch, after, out, true));
+    let _ = fs::remove_file(&scratch);
+    let merged = outcome?;
+    Ok(json!({
+        "path": merged["path"],
+        "pages": merged["pages"],
+        "sourcePages": total,
+        "insertedPages": count,
+        "after": after,
+    }))
+}
+
 /// Replaces the selected pages of one PDF with every page of another PDF.
 ///
 /// The selected pages are removed and the pages of `insert` take the position
@@ -562,6 +625,7 @@ pub fn capabilities() -> serde_json::Value {
             "deletePages": "supported",
             "duplicatePages": "supported",
             "insertPages": "supported",
+            "insertBlankPages": "supported",
             "replacePages": "supported",
             "reversePages": "supported",
             "rotatePages": "supported",

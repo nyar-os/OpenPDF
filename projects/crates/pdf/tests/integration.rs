@@ -8,7 +8,7 @@ use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
-    insert_pages,
+    insert_blank_pages, insert_pages,
     merge, metadata, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages, set_bookmarks, set_metadata,
     set_page_boxes, split, stamp,
 };
@@ -879,6 +879,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["fillForm"], "supported");
     assert_eq!(matrix["operations"]["deletePages"], "supported");
     assert_eq!(matrix["operations"]["insertPages"], "supported");
+    assert_eq!(matrix["operations"]["insertBlankPages"], "supported");
     assert_eq!(matrix["operations"]["replacePages"], "supported");
     assert_eq!(matrix["operations"]["reversePages"], "supported");
     assert_eq!(matrix["operations"]["rotatePages"], "supported");
@@ -1013,6 +1014,41 @@ fn insert_pages_places_the_other_document_after_the_selected_page() {
 
     assert_invalid(insert_pages(&target, &insert, 4, &out, false), "session/argument-invalid");
     assert_invalid(insert_pages(&target, &insert, 1, &out, false), "io/exists");
+}
+
+#[test]
+fn insert_blank_pages_keeps_order_and_geometry() {
+    let workspace = Workspace::new();
+    let target = workspace.create("deck.pdf", None, &["One", "Two"]);
+    let out = workspace.path("blank.pdf");
+
+    let report = insert_blank_pages(&target, 1, 2, None, &out, false).expect("insert blanks");
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["sourcePages"], json!(2));
+    assert_eq!(report["insertedPages"], json!(2));
+    assert_eq!(report["after"], json!(1));
+
+    let inspected = inspect(&out).expect("inspect inserted");
+    assert_eq!(inspected.pages, 4);
+    for page in &inspected.page_sizes {
+        assert!(
+            (page.width_pt - 612.0).abs() < 1.0 && (page.height_pt - 792.0).abs() < 1.0,
+            "blanks keep the source geometry: {page:?}"
+        );
+    }
+    let text = extract_text(&out).expect("extract inserted").markdown;
+    assert!(text.find("One").expect("One") < text.find("Two").expect("Two"), "page order changed: {text}");
+
+    let a4 = workspace.path("a4.pdf");
+    insert_blank_pages(&target, 0, 1, Some("a4"), &a4, false).expect("insert an A4 blank first");
+    let inspected = inspect(&a4).expect("inspect a4");
+    assert_eq!(inspected.pages, 3);
+    assert!((inspected.page_sizes[0].width_pt - 595.276).abs() < 1.0, "the explicit size wins: {inspected:?}");
+
+    assert_invalid(insert_blank_pages(&target, 3, 1, None, &out, true), "session/argument-invalid");
+    assert_invalid(insert_blank_pages(&target, 0, 0, None, &workspace.path("zero.pdf"), true), "session/argument-invalid");
+    assert_invalid(insert_blank_pages(&target, 0, 101, None, &workspace.path("many.pdf"), true), "session/argument-invalid");
+    assert_invalid(insert_blank_pages(&target, 1, 1, None, &out, false), "io/exists");
 }
 
 #[test]

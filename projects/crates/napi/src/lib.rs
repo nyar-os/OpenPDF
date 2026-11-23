@@ -186,6 +186,31 @@ fn pdf_insert_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Inserts blank pages after the selected page of one PDF.
+#[function]
+fn pdf_insert_blank_pages(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let after = argument(&ctx, 1)?.as_i64()?;
+    let after =
+        u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
+    let count = argument(&ctx, 2)?.as_i64()?;
+    let count =
+        u32::try_from(count).map_err(|_| Error::new("session/argument-invalid: `count` must be a non-negative integer"))?;
+    let size = optional_text(&ctx, 3)?;
+    let out = text(&ctx, 4)?;
+    let overwrite = ctx.args().get(5).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::insert_blank_pages(
+        std::path::Path::new(&path),
+        after,
+        count,
+        size.as_deref(),
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Replaces the selected pages of one PDF with every page of another PDF.
 #[function]
 fn pdf_replace_pages(ctx: CallContext) -> Result<JsValue> {
@@ -465,6 +490,7 @@ register_module![
     pdf_delete_pages,
     pdf_duplicate_pages,
     pdf_insert_pages,
+    pdf_insert_blank_pages,
     pdf_replace_pages,
     pdf_reverse_pages,
     pdf_rotate_pages,

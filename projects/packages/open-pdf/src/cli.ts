@@ -509,6 +509,45 @@ cli
     });
 
 cli
+    .command('insert-blank-pages', 'cli.cmd.insert-blank-pages')
+    .option('--after <page>', 'cli.opt.after')
+    .option('--count <count>', 'cli.opt.count')
+    .option('--size <size>', 'cli.opt.blank-size')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const afterText = text(options, 'after');
+        const after = afterText === undefined ? 0 : Number(afterText);
+        if (!Number.isSafeInteger(after) || after < 0) {
+            ctx.fail('open-pdf.cli.after-args', { message: '`--after <page>` must be an integer of at least 0' });
+            return 2;
+        }
+        const countText = text(options, 'count');
+        const count = countText === undefined ? 1 : Number(countText);
+        if (!Number.isSafeInteger(count) || count < 1 || count > 100) {
+            ctx.fail('open-pdf.cli.count-args', { message: '`--count <count>` must be an integer between 1 and 100' });
+            return 2;
+        }
+        const size = text(options, 'size');
+        const report = await pdf.insertBlankPages(file, after, count, size, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `inserted ${report.path} pages=${report.pages} after=${report.after} insertedPages=${report.insertedPages}`,
+        );
+        return 0;
+    });
+
+cli
     .command('replace-pages', 'cli.cmd.replace-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('--insert <file>', 'cli.opt.insert')

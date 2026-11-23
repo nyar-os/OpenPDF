@@ -126,6 +126,7 @@ export interface PdfCapabilities {
         readonly deletePages: SupportLevel;
         readonly duplicatePages: SupportLevel;
         readonly insertPages: SupportLevel;
+        readonly insertBlankPages: SupportLevel;
         readonly replacePages: SupportLevel;
         readonly reversePages: SupportLevel;
         readonly rotatePages: SupportLevel;
@@ -223,6 +224,19 @@ export interface InsertPagesReport {
     /** The inserted document. */
     readonly insert: string;
     /** One-based target page the inserted pages follow; `0` means first. */
+    readonly after: number;
+}
+
+/** Result of `insertBlankPages()`. */
+export interface InsertBlankPagesReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages in the target document before the insertion. */
+    readonly sourcePages: number;
+    /** Blank pages that were inserted. */
+    readonly insertedPages: number;
+    /** One-based target page the blanks follow; `0` means first. */
     readonly after: number;
 }
 

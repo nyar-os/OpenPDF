@@ -6,7 +6,7 @@ wired to the same methods.
 ## API surface
 
 - **Session and inspection** — `new OpenPDF({ locale, overwrite })`, `capabilities()`, `inspect()`, `outline()`, `metadata()`
-- **Page assembly** — `merge()`, `split()`, `splitEvery()`, `arrange()`, `deletePages()`, `duplicatePages()`, `insertPages()`, `replacePages()`, `reversePages()`, `keepPages()`
+- **Page assembly** — `merge()`, `split()`, `splitEvery()`, `arrange()`, `deletePages()`, `duplicatePages()`, `insertPages()`, `insertBlankPages()`, `replacePages()`, `reversePages()`, `keepPages()`
 - **Page edits** — `rotatePages()`, `setPageBoxes()`
 - **Metadata, outlines and forms** — `setMetadata()`, `setBookmarks()`, `fillForm()`
 - **Creation and stamping** — `create()`, `stamp()`
