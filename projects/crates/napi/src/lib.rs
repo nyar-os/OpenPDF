@@ -239,7 +239,7 @@ fn pdf_insert_blank_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
-/// Replaces the selected pages of one PDF with every page of another PDF.
+/// Replaces the selected pages of one PDF with pages of another PDF.
 #[function]
 fn pdf_replace_pages(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
@@ -247,10 +247,12 @@ fn pdf_replace_pages(ctx: CallContext) -> Result<JsValue> {
     let insert = text(&ctx, 2)?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let selected = optional_text(&ctx, 5)?;
     let report = open_pdf_core::replace_pages(
         std::path::Path::new(&path),
         &pages,
         std::path::Path::new(&insert),
+        selected.as_deref(),
         std::path::Path::new(&out),
         overwrite,
     )

@@ -274,8 +274,12 @@ export interface ReplacePagesReport {
     readonly sourcePages: number;
     /** One-based pages that were removed, in document order. */
     readonly replaced: readonly number[];
-    /** Pages taken from the replacement document. */
+    /** Pages taken from the replacement document, in the order used. */
     readonly replacementPages: number;
+    /** Pages in the replacement document. */
+    readonly sourceInsertPages: number;
+    /** One-based source pages used as the replacement, in that order. */
+    readonly selectedPages: readonly number[];
     /** The replacement document. */
     readonly insert: string;
 }

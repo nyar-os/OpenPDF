@@ -623,24 +623,33 @@ pub fn insert_blank_pages(
     }))
 }
 
-/// Replaces the selected pages of one PDF with every page of another PDF.
+/// Replaces the selected pages of one PDF with pages of another PDF.
 ///
-/// The selected pages are removed and the pages of `insert` take the position
-/// of the first removed page; the remaining pages keep their order. The output
-/// is replaced when it already exists only if `overwrite` is true.
+/// The selected pages are removed and the chosen replacement pages take the
+/// position of the first removed page; the remaining pages keep their order.
+/// `selected` is an optional one-based source range list such as `3,1`, so the
+/// replacement pages follow that order instead of the whole input; every page
+/// is used when it is omitted. The output is replaced when it already exists
+/// only if `overwrite` is true.
 pub fn replace_pages(
     path: &Path,
     pages: &str,
     insert: &Path,
+    selected: Option<&str>,
     out: &Path,
     overwrite: bool,
 ) -> Result<serde_json::Value, ServiceError> {
     let total = document_pdf::inspect(path)?.pages;
-    let selected = parse_page_ranges(pages, total)?;
-    let replacement = document_pdf::inspect(insert)?.pages;
-    if replacement == 0 {
+    let selection = parse_page_ranges(pages, total)?;
+    let available = document_pdf::inspect(insert)?.pages;
+    if available == 0 {
         return Err(invalid_pages("the replacement PDF has no pages"));
     }
+    let chosen = match selected {
+        Some(ranges) => parse_page_ranges(ranges, available)?,
+        None => (1..=available).collect(),
+    };
+    let replacement = chosen.len();
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
@@ -657,14 +666,19 @@ pub fn replace_pages(
         if target.documents.len() != total {
             return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
         }
-        let first = selected.first().copied().unwrap_or_default();
-        let mut inputs = Vec::with_capacity(total + parts.documents.len());
+        let first = selection.first().copied().unwrap_or_default();
+        let mut inputs = Vec::with_capacity(total + chosen.len());
         for (index, part) in target.documents.iter().enumerate() {
             let page = index + 1;
             if page == first {
-                inputs.extend(parts.documents.iter().map(|replacement| PathBuf::from(&replacement.path)));
+                for source in &chosen {
+                    let part = parts.documents.get(*source as usize - 1).ok_or_else(|| {
+                        ServiceError::new("format/invalid", "a selected replacement page is missing from the split output")
+                    })?;
+                    inputs.push(PathBuf::from(&part.path));
+                }
             }
-            if !selected.contains(&page) {
+            if !selection.contains(&page) {
                 inputs.push(PathBuf::from(&part.path));
             }
         }
@@ -677,8 +691,10 @@ pub fn replace_pages(
         "path": merged.path,
         "pages": merged.pages,
         "sourcePages": total,
-        "replaced": selected,
+        "replaced": selection,
         "replacementPages": replacement,
+        "sourceInsertPages": available,
+        "selectedPages": chosen,
         "insert": insert.display().to_string(),
     }))
 }

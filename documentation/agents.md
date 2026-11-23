@@ -35,7 +35,7 @@ open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
 open-pdf insert-pages <file> --insert <file> --after <page> [--pages <ranges>] -o <out> [--overwrite]
 open-pdf insert-blank-pages <file> --after <page> [--count <count>] [--size <size>] -o <out> [--overwrite]
-open-pdf replace-pages <file> --pages <list> --insert <file> -o <out> [--overwrite]
+open-pdf replace-pages <file> --pages <list> --insert <file> [--source-pages <ranges>] -o <out> [--overwrite]
 open-pdf reverse-pages <file> -o <out> [--overwrite]
 open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
@@ -115,7 +115,9 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   `--after` is the one-based page of the target the inserted pages follow; `0`
   puts them before the first page and the target page count appends them. On `replace-pages` the pages named by `--pages` are
   removed and the replacement pages take the position of the first removed
-  page. `--count` on `insert-blank-pages` is `1`-`100` and defaults to `1`;
+  page. `--source-pages` on `replace-pages` optionally selects one-based pages
+  of `--insert` in that order; without it every page is used.
+  `--count` on `insert-blank-pages` is `1`-`100` and defaults to `1`;
   `--size` accepts the same names as `create --page-size`, and without it the
   blanks take the geometry of the source's first page.
   page, so the page count changes by `replacementPages - removed`.
@@ -185,7 +187,7 @@ Report shapes:
 | `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |
 | `insert-pages` | `{ path, pages, sourcePages, insertedPages, sourceInsertPages, selectedPages, insert, after }` |
 | `insert-blank-pages` | `{ path, pages, sourcePages, insertedPages, after }` |
-| `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, insert }` |
+| `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, sourceInsertPages, selectedPages, insert }` |
 | `reverse-pages` | `{ path, pages, sourcePages }` |
 | `extract-pages` | `{ path, pages, kept, removed, bytes }` |
 | `rotate` | `{ path, pages, rotated, bytes }` |

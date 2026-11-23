@@ -1093,11 +1093,13 @@ fn replace_pages_splices_the_replacement_in_place() {
     let insert = workspace.create("extra.pdf", None, &["Alpha", "Beta"]);
     let out = workspace.path("replaced.pdf");
 
-    let report = replace_pages(&target, "2-3", &insert, &out, false).expect("replace pages");
+    let report = replace_pages(&target, "2-3", &insert, None, &out, false).expect("replace pages");
     assert_eq!(report["pages"], json!(4));
     assert_eq!(report["sourcePages"], json!(4));
     assert_eq!(report["replaced"], json!([2, 3]));
     assert_eq!(report["replacementPages"], json!(2));
+    assert_eq!(report["sourceInsertPages"], json!(2));
+    assert_eq!(report["selectedPages"], json!([1, 2]));
 
     let text = extract_text(&out).expect("extract replaced").markdown;
     let one = text.find("One").expect("One");
@@ -1107,19 +1109,31 @@ fn replace_pages_splices_the_replacement_in_place() {
     assert!(one < alpha && alpha < beta && beta < four, "unexpected order: {text}");
     assert!(!text.contains("Two") && !text.contains("Three"), "removed pages survived: {text}");
 
+    // Selecting source pages chooses only those pages and keeps their order.
+    let chosen = workspace.path("chosen.pdf");
+    let report = replace_pages(&target, "2-3", &insert, Some("2"), &chosen, false).expect("replace with one source page");
+    assert_eq!(report["replacementPages"], json!(1));
+    assert_eq!(report["selectedPages"], json!([2]));
+    let text = extract_text(&chosen).expect("extract chosen").markdown;
+    assert!(!text.contains("Alpha") && text.contains("Beta"), "only the chosen source page is used: {text}");
+
     let tail = workspace.path("tail.pdf");
-    replace_pages(&target, "4", &insert, &tail, false).expect("replace the tail");
+    replace_pages(&target, "4", &insert, None, &tail, false).expect("replace the tail");
     let text = extract_text(&tail).expect("extract tail").markdown;
     assert!(text.find("Three").expect("Three") < text.find("Alpha").expect("Alpha"), "unexpected order: {text}");
 
-    assert_invalid(replace_pages(&target, "9", &insert, &workspace.path("range.pdf"), true), "session/argument-invalid");
-    assert_invalid(replace_pages(&target, "1", &insert, &out, false), "io/exists");
+    assert_invalid(
+        replace_pages(&target, "9", &insert, None, &workspace.path("range.pdf"), true),
+        "session/argument-invalid",
+    );
+    assert_invalid(replace_pages(&target, "1", &insert, Some("3"), &workspace.path("bad-source.pdf"), true), "session/argument-invalid");
+    assert_invalid(replace_pages(&target, "1", &insert, None, &out, false), "io/exists");
 
     let empty = workspace.write("empty.pdf", &assemble(&[
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [] /Count 0 >>",
     ]));
-    assert_invalid(replace_pages(&target, "1", &empty, &workspace.path("empty-out.pdf"), true), "session/argument-invalid");
+    assert_invalid(replace_pages(&target, "1", &empty, None, &workspace.path("empty-out.pdf"), true), "session/argument-invalid");
 }
 
 #[test]

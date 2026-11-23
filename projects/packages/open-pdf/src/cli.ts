@@ -572,6 +572,7 @@ cli
     .command('replace-pages', 'cli.cmd.replace-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('--insert <file>', 'cli.opt.insert')
+    .option('--source-pages <ranges>', 'cli.opt.replace-pages-source')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--overwrite', 'cli.opt.overwrite')
     .actionCtx(async (options, _args, ctx) => {
@@ -597,7 +598,14 @@ cli
             ctx.fail('open-pdf.cli.insert-args', { message: '`--insert <file>` is required' });
             return 2;
         }
-        const report = await pdf.replacePages(file, pages, insert, out, flag(options, 'overwrite'));
+        const report = await pdf.replacePages(
+            file,
+            pages,
+            insert,
+            out,
+            flag(options, 'overwrite'),
+            text(options, 'source-pages'),
+        );
         ctx.emitResult(
             report,
             `replaced ${report.path} pages=${report.pages} replacementPages=${report.replacementPages}`,

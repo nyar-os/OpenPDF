@@ -164,15 +164,16 @@ export class OpenPDF {
         return service.insertBlankPages(path, after, count, size, out, overwrite);
     }
 
-    /** Replaces the selected pages with every page of `insert`. */
+    /** Replaces the selected pages with pages of `insert`, optionally choosing source pages. */
     async replacePages(
         path: string,
         pages: string,
         insert: string,
         out: string,
         overwrite = this.defaultOverwrite,
+        selected: string | null = null,
     ): Promise<ReplacePagesReport> {
-        return service.replacePages(path, pages, insert, out, overwrite);
+        return service.replacePages(path, pages, insert, out, overwrite, selected);
     }
 
     /** Reverses the page order into a new PDF. */
@@ -397,15 +398,16 @@ export class OpenPDF {
         return service.insertBlankPages(path, after, count, size, out, overwrite);
     }
 
-    /** Replaces the selected pages with every page of `insert`. */
+    /** Replaces the selected pages with pages of `insert`, optionally choosing source pages. */
     static replacePages(
         path: string,
         pages: string,
         insert: string,
         out: string,
         overwrite = false,
+        selected: string | null = null,
     ): ReplacePagesReport {
-        return service.replacePages(path, pages, insert, out, overwrite);
+        return service.replacePages(path, pages, insert, out, overwrite, selected);
     }
 
     /** Reverses the page order into a new PDF. */

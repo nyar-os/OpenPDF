@@ -216,10 +216,11 @@ export function insertBlankPages(
 }
 
 /**
- * Replaces the selected pages of `path` with every page of `insert`.
+ * Replaces the selected pages of `path` with pages of `insert`.
  *
  * The replacement pages take the position of the first removed page and the
- * remaining pages keep their order.
+ * remaining pages keep their order. `selected` is an optional one-based source
+ * range list such as `3,1`; every page of `insert` is used when it is omitted.
  */
 export function replacePages(
     path: string,
@@ -227,9 +228,10 @@ export function replacePages(
     insert: string,
     out: string,
     overwrite = false,
+    selected: string | null = null,
 ): ReplacePagesReport {
     return decode<ReplacePagesReport>(() =>
-        binding('replacePages').pdf_replace_pages(path, pages, insert, out, overwrite),
+        binding('replacePages').pdf_replace_pages(path, pages, insert, out, overwrite, selected),
     );
 }
 
