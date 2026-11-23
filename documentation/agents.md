@@ -38,7 +38,7 @@ open-pdf insert-blank-pages <file> (--after <page> | --before <page>) [--count <
 open-pdf replace-pages <file> --pages <list> --insert <file> [--source-pages <ranges>] -o <out> [--overwrite]
 open-pdf reverse-pages <file> [--pages <list>] -o <out> [--overwrite]
 open-pdf swap-pages <file> --pages <list> --with <list> -o <out> [--overwrite]
-open-pdf move-pages <file> --pages <list> --after <page> -o <out> [--overwrite]
+open-pdf move-pages <file> --pages <list> (--after <page> | --before <page>) -o <out> [--overwrite]
 open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
 open-pdf set-page-boxes <file> --pages <list> --box <l,b,r,t> -o <out> [--overwrite]
@@ -134,9 +134,10 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
 - `--pages` on `reverse-pages` is a 1-based range list; those pages trade places
   while every other page keeps its position, and omitting it reverses the whole
   document.
-- `--pages` on `move-pages` is a 1-based range list and `--after` names the
-  one-based page the selection follows; `0` moves it to the front and an anchor
-  inside the selection is rejected. Moved pages keep their relative order.
+- `--pages` on `move-pages` is a 1-based range list; `--after` names the
+  one-based page the selection follows and `--before` names the page it should
+  precede, the two are mutually exclusive, `0` / `1` move it to the front and an
+  anchor inside the selection is rejected. Moved pages keep their relative order.
 - `--rotate` on `arrange` and `--degrees` on `rotate` are clockwise and must be
   `90`, `180` or `270`. The CLI rejects other degrees on `rotate`; pass only
   supported values to `arrange`.

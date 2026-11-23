@@ -55,6 +55,7 @@
             "insert": "PDF whose pages are inserted",
             "after": "Insert after this one-based page; 0 puts the pages first",
             "before": "Insert before this one-based page; 1 puts the pages first",
+            "move-before": "Place the moved pages before this one-based page; 1 puts them first",
             "count": "Number of blank pages to insert, 1 to 100 (default 1)",
             "blank-size": "Page size for blanks: a3, a4, a5, letter, legal, tabloid or WIDTHxHEIGHT (default: match the source's first page)",
             "limit": "Maximum number of matches to report (default 100, max 500)",
