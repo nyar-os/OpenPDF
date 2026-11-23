@@ -517,7 +517,7 @@ cli
     .actionCtx(async (options, _args, ctx) => {
         const file = input(options);
         const out = text(options, 'out');
-        const pages = pageRanges(options);
+        const pages = pageRanges(options, 'pages');
         const insert = text(options, 'insert');
         if (file === undefined) {
             ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
@@ -527,8 +527,10 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        if (pages === undefined || pages.length === 0) {
-            ctx.fail('open-pdf.cli.pages-args', { message: '`--pages <list>` must be a comma-separated 1-based page list' });
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.pages-args', {
+                message: '`--pages <list>` must be 1-based ranges such as 1-3,5',
+            });
             return 2;
         }
         if (insert === undefined || insert.length === 0) {
@@ -538,7 +540,7 @@ cli
         const report = await pdf.replacePages(file, pages, insert, out, flag(options, 'overwrite'));
         ctx.emitResult(
             report,
-            `replaced ${report.path} pages=${report.pages} replaced=${formatPageList(report.replaced)} replacementPages=${report.replacementPages}`,
+            `replaced ${report.path} pages=${report.pages} replacementPages=${report.replacementPages}`,
         );
         return 0;
     });
