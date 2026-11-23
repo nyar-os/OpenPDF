@@ -38,6 +38,7 @@ export interface NativeBinding {
     pdf_rotate_pages(path: string, pages: string, degrees: number, out: string, overwrite: boolean): string;
     pdf_set_page_boxes(path: string, pages: string, cropJson: string, out: string, overwrite: boolean): string;
     pdf_set_metadata(path: string, out: string, patchJson: string): string;
+    pdf_clear_metadata(path: string, out: string): string;
     pdf_set_bookmarks(path: string, out: string, requestJson: string): string;
     pdf_fill_form(path: string, out: string, requestJson: string): string;
     pdf_create(requestJson: string): string;

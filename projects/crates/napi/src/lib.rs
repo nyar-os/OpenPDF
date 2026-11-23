@@ -311,6 +311,15 @@ fn pdf_set_metadata(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Copies every page while clearing the information dictionary.
+#[function]
+fn pdf_clear_metadata(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out = text(&ctx, 1)?;
+    let report = open_pdf_core::clear_metadata(std::path::Path::new(&path), std::path::Path::new(&out)).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Bookmark request payload accepted by `pdf_set_bookmarks`.
 #[derive(serde::Deserialize)]
 struct BookmarkRequest {
@@ -523,6 +532,7 @@ register_module![
     pdf_rotate_pages,
     pdf_set_page_boxes,
     pdf_set_metadata,
+    pdf_clear_metadata,
     pdf_set_bookmarks,
     pdf_fill_form,
     pdf_create,

@@ -41,6 +41,7 @@ open-pdf extract-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf rotate <file> --pages <list> --degrees <90|180|270> -o <out> [--overwrite]
 open-pdf set-page-boxes <file> --pages <list> --box <l,b,r,t> -o <out> [--overwrite]
 open-pdf set-metadata <file> -o <out> [--title <text>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--producer <text>]
+open-pdf clear-metadata <file> -o <out>
 open-pdf bookmarks <file> -o <out> --bookmark "Title:Page" [--bookmark "Title:Page"...] [--depth <level>]
 open-pdf fill-form <file> -o <out> --set Name=Value [--set Name=Value...]
 open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--page-size <size>] [--font <name>] [--font-size <pt>] [--margin <pt>] [--align <align>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--page-numbers] [--overwrite]
@@ -148,6 +149,9 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
 - `--pages` on `merge` is positional: repeat it once per input to keep only those one-based ranges from that file, e.g. `--pages 3,1 --pages 2-4`. Inputs past the last `--pages` keep every page. A selection that preserves the original order merges directly; any other order is projected first, so `3,1` writes page 3 before page 1.
 - `set-metadata` keeps a field's source value when the flag is omitted; an
   empty string removes the field.
+- `clear-metadata` copies every page and empties every standard `/Info` field,
+  keeping the catalog, pages and outlines. It always replaces an existing output,
+  like `set-metadata`.
 - `--name` on `extract-images --stdin` sets the output file stem and defaults to
   `stdin`; it is ignored for path input.
 - `--pages` on `extract-images` keeps only the selected pages; images are named
@@ -186,6 +190,7 @@ Report shapes:
 | `rotate` | `{ path, pages, rotated, bytes }` |
 | `set-page-boxes` | `{ path, pages, cropped, bytes }` |
 | `set-metadata` | `{ path, pages, metadata }` |
+| `clear-metadata` | `{ path, pages, metadata }`, with every standard field `null` |
 | `bookmarks` | `{ path, pages, bookmarks }` |
 | `fill-form` | `{ path, filled, missing, pages }` |
 | `create` | `{ path, pages, bytes }` |
@@ -271,7 +276,7 @@ transformations never read from stdin, and `split` always reads a path.
 When a guarded output already exists and overwrite is not allowed, the operation
 fails with `io/exists`; nothing is replaced in place.
 
-`split`, `arrange`, `set-metadata`, `bookmarks`, `fill-form` and `stamp` expose
+`split`, `arrange`, `set-metadata`, `clear-metadata`, `bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
 default for `merge`, `deletePages`, `duplicatePages`, `insertPages`,
 `insertBlankPages`, `replacePages`, `reversePages`, `keepPages`, `rotatePages`,

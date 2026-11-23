@@ -768,6 +768,25 @@ cli
     });
 
 cli
+    .command('clear-metadata', 'cli.cmd.clear-metadata')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const report = await pdf.clearMetadata(file, out);
+        ctx.emitResult(report, `cleared ${report.path} pages=${report.pages} metadata=(none)`);
+        return 0;
+    });
+
+cli
     .command('bookmarks', 'cli.cmd.bookmarks')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--bookmark <title:page>...', 'cli.opt.bookmark')

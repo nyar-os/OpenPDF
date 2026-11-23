@@ -134,6 +134,7 @@ export interface PdfCapabilities {
         readonly setPageBoxes: SupportLevel;
         readonly metadata: SupportLevel;
         readonly setMetadata: SupportLevel;
+        readonly clearMetadata: SupportLevel;
         readonly setBookmarks: SupportLevel;
         readonly fillForm: SupportLevel;
         readonly stamp: SupportLevel;

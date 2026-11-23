@@ -20,6 +20,7 @@
             "rotate": "Add a clockwise rotation to the selected pages",
             "set-page-boxes": "Write a CropBox on the selected pages",
             "set-metadata": "Copy every page and rewrite the information dictionary",
+            "clear-metadata": "Copy every page and remove every standard information field",
             "bookmarks": "Copy every page and replace the outline with the given bookmarks",
             "fill-form": "Copy every page and fill AcroForm field values",
             "create": "Create a PDF with styled text pages",

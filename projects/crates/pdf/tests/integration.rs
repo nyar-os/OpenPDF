@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
-    Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, create, delete_pages,
+    Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, clear_metadata, create,
+    delete_pages,
     duplicate_pages,
     extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
     insert_blank_pages, insert_pages,
@@ -1727,4 +1728,55 @@ fn merge_selected_rejects_bad_ranges_and_existing_output() {
     let report = merge_selected(&[workspace.create("other.pdf", None, &["CCC"])], None, &merged, true, None)
         .expect("overwrite replaces the output");
     assert_eq!(report["pages"], json!(1));
+}
+
+#[test]
+fn clear_metadata_empties_every_standard_field() {
+    let workspace = Workspace::new();
+    let source = workspace.path("tagged.pdf");
+    let report = create(&CreateRequest {
+        out: source.clone(),
+        title: Some("Tagged".to_owned()),
+        pages: vec!["Hello".to_owned()],
+        overwrite: false,
+        page_size: None,
+        font: None,
+        font_size: None,
+        margin_pt: None,
+        align: None,
+        author: Some("Ada".to_owned()),
+        subject: Some("Notes".to_owned()),
+        keywords: Some("one, two".to_owned()),
+        creator: Some("Tests".to_owned()),
+        page_numbers: None,
+    })
+    .expect("create tagged PDF");
+    assert_eq!(report.pages, 1);
+    let before = inspect(&source).expect("inspect source");
+    assert_eq!(before.metadata.title.as_deref(), Some("Tagged"));
+    assert_eq!(before.metadata.author.as_deref(), Some("Ada"));
+
+    let cleared = workspace.path("cleared.pdf");
+    let report = clear_metadata(&source, &cleared).expect("clear metadata");
+    assert_eq!(report.pages, 1);
+    assert_eq!(report.path, cleared.display().to_string());
+    for field in [
+        report.metadata.title.as_deref(),
+        report.metadata.author.as_deref(),
+        report.metadata.subject.as_deref(),
+        report.metadata.keywords.as_deref(),
+        report.metadata.creator.as_deref(),
+        report.metadata.producer.as_deref(),
+    ] {
+        assert_eq!(field, None, "every standard field is cleared");
+    }
+
+    let inspected = inspect(&cleared).expect("inspect cleared");
+    assert_eq!(inspected.pages, 1);
+    assert_eq!(inspected.metadata.title, None);
+    assert_eq!(extract_text(&cleared).expect("text survives").markdown.contains("Hello"), true);
+
+    clear_metadata(&source, &cleared).expect("replacing the output is the documented behaviour");
+    let _ = fs::remove_file(source);
+    let _ = fs::remove_file(cleared);
 }

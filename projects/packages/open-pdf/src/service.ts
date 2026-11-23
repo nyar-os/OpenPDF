@@ -333,6 +333,11 @@ export function setMetadata(path: string, out: string, patch: MetadataPatch): Se
     return decode<SetMetadataReport>(() => binding('setMetadata').pdf_set_metadata(path, out, JSON.stringify(patch)));
 }
 
+/** Copies every page while clearing every standard `/Info` field. */
+export function clearMetadata(path: string, out: string): SetMetadataReport {
+    return decode<SetMetadataReport>(() => binding('clearMetadata').pdf_clear_metadata(path, out));
+}
+
 /** Copies every page while replacing the outline tree. */
 export function setBookmarks(path: string, out: string, bookmarks: readonly Bookmark[]): BookmarkReport {
     return decode<BookmarkReport>(() =>

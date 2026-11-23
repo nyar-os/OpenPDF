@@ -211,6 +211,11 @@ export class OpenPDF {
         return service.setMetadata(path, out, patch);
     }
 
+    /** Copies every page while clearing every standard `/Info` field. */
+    async clearMetadata(path: string, out: string): Promise<SetMetadataReport> {
+        return service.clearMetadata(path, out);
+    }
+
     /** Copies every page while replacing the outline tree. */
     async setBookmarks(path: string, out: string, bookmarks: readonly Bookmark[]): Promise<BookmarkReport> {
         return service.setBookmarks(path, out, bookmarks);
@@ -436,6 +441,11 @@ export class OpenPDF {
     /** Copies every page while rewriting the information dictionary. */
     static setMetadata(path: string, out: string, patch: MetadataPatch): SetMetadataReport {
         return service.setMetadata(path, out, patch);
+    }
+
+    /** Copies every page while clearing every standard `/Info` field. */
+    static clearMetadata(path: string, out: string): SetMetadataReport {
+        return service.clearMetadata(path, out);
     }
 
     /** Copies every page while replacing the outline tree. */

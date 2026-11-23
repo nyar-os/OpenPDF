@@ -315,6 +315,24 @@ fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, Serv
     Ok(selected)
 }
 
+/// Copies a PDF while emptying its information dictionary.
+///
+/// Every standard field (`Title`, `Author`, `Subject`, `Keywords`, `Creator`,
+/// `Producer`) is cleared, while pages, outlines and other catalog entries are
+/// kept. The output is always replaced when it already exists, matching
+/// `set-metadata`.
+pub fn clear_metadata(path: &Path, out: &Path) -> Result<SetMetadataReport, ServiceError> {
+    let patch = MetadataPatch {
+        title: Some(String::new()),
+        author: Some(String::new()),
+        subject: Some(String::new()),
+        keywords: Some(String::new()),
+        creator: Some(String::new()),
+        producer: Some(String::new()),
+    };
+    document_pdf::set_metadata(path, out, &patch)
+}
+
 /// Merges inputs after removing pages outside each input's selection.
 ///
 /// `selections` is positional: entry `i` is the one-based page ranges kept from
@@ -739,6 +757,7 @@ pub fn capabilities() -> serde_json::Value {
             "setPageBoxes": "supported",
             "metadata": "supported",
             "setMetadata": "supported",
+            "clearMetadata": "supported",
             "setBookmarks": "supported",
             "fillForm": "supported",
             "stamp": "supported",
