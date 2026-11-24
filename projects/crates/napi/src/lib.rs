@@ -557,6 +557,31 @@ fn pdf_stamp(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Stamps sequential page numbers on the selected pages of one PDF file.
+#[function]
+fn pdf_stamp_page_numbers(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let pages = text(&ctx, 1)?;
+    let start = argument(&ctx, 2)?.as_i64()?;
+    let start =
+        u32::try_from(start).map_err(|_| Error::new("session/argument-invalid: `start` must be a non-negative integer"))?;
+    let format = optional_text(&ctx, 3)?;
+    let position = optional_text(&ctx, 4)?;
+    let out = text(&ctx, 5)?;
+    let overwrite = ctx.args().get(6).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::stamp_page_numbers(
+        std::path::Path::new(&path),
+        &pages,
+        start,
+        format.as_deref(),
+        position.as_deref(),
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 register_module![
     version,
     capabilities,
@@ -592,5 +617,6 @@ register_module![
     pdf_inspect_bytes,
     pdf_extract_text_bytes,
     pdf_extract_images_bytes,
-    pdf_stamp
+    pdf_stamp,
+    pdf_stamp_page_numbers
 ];

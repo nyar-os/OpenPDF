@@ -42,6 +42,7 @@ import type {
     SetMetadataReport,
     SetPageBoxesReport,
     SplitReport,
+    StampPageNumbersReport,
     StampReport,
     StampRequest,
     SwapPagesReport,
@@ -265,6 +266,26 @@ export class OpenPDF {
     /** Paints a text stamp over the selected pages and writes a new PDF. */
     async stamp(path: string, out: string, request: StampRequest): Promise<StampReport> {
         return service.stamp(path, out, request);
+    }
+
+    /**
+     * Stamps sequential page numbers on the selected pages into a new PDF.
+     *
+     * The first selected page is numbered `start` and every following page
+     * counts up. `format` accepts `{page}` and `{pages}` and defaults to
+     * `{page} of {pages}`; `position` is `center`, `top` or `bottom` and
+     * defaults to `bottom`.
+     */
+    async stampPageNumbers(
+        path: string,
+        pages: string,
+        start: number,
+        format: string | undefined,
+        position: string | undefined,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<StampPageNumbersReport> {
+        return service.stampPageNumbers(path, pages, start, format, position, out, overwrite);
     }
 
     /**
@@ -520,6 +541,19 @@ export class OpenPDF {
     /** Paints a text stamp over the selected pages and writes a new PDF. */
     static stamp(path: string, out: string, request: StampRequest): StampReport {
         return service.stamp(path, out, request);
+    }
+
+    /** Stamps sequential page numbers on the selected pages into a new PDF. */
+    static stampPageNumbers(
+        path: string,
+        pages: string,
+        start: number,
+        format: string | undefined,
+        position: string | undefined,
+        out: string,
+        overwrite = false,
+    ): StampPageNumbersReport {
+        return service.stampPageNumbers(path, pages, start, format, position, out, overwrite);
     }
 
     /**

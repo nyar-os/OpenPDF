@@ -139,6 +139,7 @@ export interface PdfCapabilities {
         readonly setBookmarks: SupportLevel;
         readonly fillForm: SupportLevel;
         readonly stamp: SupportLevel;
+        readonly stampPageNumbers: SupportLevel;
         readonly extractText: SupportLevel;
         readonly extractTextPages: SupportLevel;
         readonly search: SupportLevel;
@@ -480,6 +481,23 @@ export interface StampReport {
     readonly pages: number;
     readonly pagesStamped: number;
     readonly bytes: number;
+}
+
+/** Result of `stampPageNumbers()`. */
+export interface StampPageNumbersReport {
+    readonly path: string;
+    /** Pages in the source document. */
+    readonly pages: number;
+    /** One-based pages that received a number, in document order. */
+    readonly numbered: readonly number[];
+    /** Number printed on the first selected page. */
+    readonly start: number;
+    /** Number printed on the last selected page. */
+    readonly last: number;
+    /** Number text used; `{page}` and `{pages}` were substituted. */
+    readonly format: string;
+    /** Stamp position: `center`, `top` or `bottom`. */
+    readonly position: string;
 }
 
 /** Result of `create()`. */

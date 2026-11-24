@@ -15,6 +15,7 @@ use open_pdf_core::{
     set_metadata,
     split_parts,
     set_page_boxes, split, stamp,
+    stamp_page_numbers,
     swap_pages,
 };
 use serde_json::json;
@@ -1459,6 +1460,55 @@ fn stamp_validates_text_opacity_and_ranges() {
         stamp(&path, &out, &StampRequest { text: "x".to_string(), pages: Some("9".to_string()), ..StampRequest::default() }),
         "session/argument-invalid",
     );
+}
+
+#[test]
+fn stamp_page_numbers_numbers_the_selection_from_the_start() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two", "Three", "Four"]);
+    let out = workspace.path("numbered.pdf");
+
+    let report = stamp_page_numbers(&path, "2-4", 101, None, None, &out, false).expect("stamp page numbers");
+    assert_eq!(report["path"], json!(out.display().to_string()));
+    assert_eq!(report["pages"], json!(4));
+    assert_eq!(report["numbered"], json!([2, 3, 4]));
+    assert_eq!(report["start"], json!(101));
+    assert_eq!(report["last"], json!(103));
+    assert_eq!(report["format"], json!("{page} of {pages}"));
+    assert_eq!(report["position"], json!("bottom"));
+
+    let extracted = extract_text(&out).expect("extract numbered");
+    for number in 101..=103 {
+        let label = format!("{number} of 103");
+        assert_eq!(extracted.markdown.matches(&label).count(), 1, "missing `{label}`: {:?}", extracted.markdown);
+    }
+    assert!(!extracted.markdown.contains("100 of 103"), "{:?}", extracted.markdown);
+    assert!(!extracted.markdown.contains("104 of 103"), "{:?}", extracted.markdown);
+    assert!(!extracted.markdown.contains("1 of 4"), "page one stays unnumbered: {:?}", extracted.markdown);
+    for page in ["One", "Two", "Three", "Four"] {
+        assert!(extracted.markdown.contains(page), "{:?}", extracted.markdown);
+    }
+    assert_eq!(inspect(&out).expect("inspect numbered").pages, 4);
+}
+
+#[test]
+fn stamp_page_numbers_validates_start_format_position_and_overwrite() {
+    let workspace = Workspace::new();
+    let path = workspace.create("deck.pdf", None, &["One", "Two"]);
+    let out = workspace.path("numbered.pdf");
+
+    assert_invalid(stamp_page_numbers(&path, "1", 0, None, None, &out, true), "session/argument-invalid");
+    assert_invalid(stamp_page_numbers(&path, "1", 1, Some("  "), None, &out, true), "session/argument-invalid");
+    assert_invalid(stamp_page_numbers(&path, "1", 1, None, Some("header"), &out, true), "session/argument-invalid");
+    assert_invalid(stamp_page_numbers(&path, "9", 1, None, None, &out, true), "session/argument-invalid");
+
+    stamp_page_numbers(&path, "1-2", 7, Some("Page {page}"), Some("top"), &out, true).expect("stamp numbers");
+    let extracted = extract_text(&out).expect("extract numbered");
+    assert!(extracted.markdown.contains("Page 7"), "{:?}", extracted.markdown);
+    assert!(extracted.markdown.contains("Page 8"), "{:?}", extracted.markdown);
+    assert!(!extracted.markdown.contains("Page 6"), "{:?}", extracted.markdown);
+
+    assert_invalid(stamp_page_numbers(&path, "1", 1, None, None, &out, false), "io/exists");
 }
 
 #[test]

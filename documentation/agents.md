@@ -48,6 +48,7 @@ open-pdf bookmarks <file> -o <out> --bookmark "Title:Page" [--bookmark "Title:Pa
 open-pdf fill-form <file> -o <out> --set Name=Value [--set Name=Value...]
 open-pdf create -o <out> --page <text> [--page <text>...] [--title <text>] [--page-size <size>] [--font <name>] [--font-size <pt>] [--margin <pt>] [--align <align>] [--author <text>] [--subject <text>] [--keywords <text>] [--creator <text>] [--page-numbers] [--overwrite]
 open-pdf stamp <file> -o <out> --text <text> [--position <position>] [--font <name>] [--font-size <pt>] [--rotation <degrees>] [--opacity <value>] [--color <hex>] [--pages <list>]
+open-pdf stamp-page-numbers <file> --pages <list> [--start <number>] [--format <text>] [--position <center|top|bottom>] -o <out> [--overwrite]
 open-pdf extract-text <file> [--pages <list>] | --stdin
 open-pdf search <file> <query> [--limit <n>] [--pages <list>] [--ignore-case] [--whole-word] [--skip <n>]
 open-pdf extract-images <file> [--pages <list>] | --stdin -o <out-dir> [--name <stem>]
@@ -167,6 +168,12 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   is `0..1`, defaulting to `0.3` centered and `0.6` otherwise. `--color` is
   `#RGB` or `#RRGGBB`. `{page}` and `{pages}` are substituted per page.
   `--pages` defaults to every page.
+- `stamp-page-numbers` numbers only the selected `--pages`: the first is
+  `--start` (default `1`) and every following page counts up, so the last
+  number is `start + pages - 1`. `--format` accepts `{page}` and `{pages}`
+  (default `{page} of {pages}`) and is resolved against that sequence, not the
+  source page numbers. `--position` is `center`, `top` or `bottom` and defaults
+  to `bottom`.
 - `--title` on `merge` replaces `/Title` in the output information dictionary.
 - `--pages` on `merge` is positional: repeat it once per input to keep only those one-based ranges from that file, e.g. `--pages 3,1 --pages 2-4`. Inputs past the last `--pages` keep every page. A selection that preserves the original order merges directly; any other order is projected first, so `3,1` writes page 3 before page 1.
 - `set-metadata` keeps a field's source value when the flag is omitted; an
@@ -219,6 +226,7 @@ Report shapes:
 | `fill-form` | `{ path, filled, missing, pages }` |
 | `create` | `{ path, pages, bytes }` |
 | `stamp` | `{ path, pages, pagesStamped, bytes }` |
+| `stamp-page-numbers` | `{ path, pages, numbered, start, last, format, position }` |
 | `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
 | `search` | `{ path, query, matchCase, wholeWord, skip, limit, pages, sourcePages?, selected?, lines, truncated, hits, losses }` |
 | `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` (`page` is the source page when `--pages` is used) |
@@ -296,15 +304,16 @@ transformations never read from stdin, and `split` always reads a path.
 
 `--overwrite` exists only on `merge`, `delete-pages`, `duplicate-pages`,
 `insert-pages`, `insert-blank-pages`, `replace-pages`, `reverse-pages`,
-`swap-pages`, `extract-pages`, `rotate`, `set-page-boxes` and `create`. The
-default is off.
+`swap-pages`, `stamp-page-numbers`, `extract-pages`, `rotate`,
+`set-page-boxes` and `create`. The default is off.
 When a guarded output already exists and overwrite is not allowed, the operation
 fails with `io/exists`; nothing is replaced in place.
 
 `split`, `arrange`, `set-metadata`, `clear-metadata`, `bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
 default for `merge`, `deletePages`, `duplicatePages`, `insertPages`,
-`insertBlankPages`, `replacePages`, `reversePages`, `swapPages`, `keepPages`, `rotatePages`,
+`insertBlankPages`, `replacePages`, `reversePages`, `swapPages`,
+`stampPageNumbers`, `keepPages`, `rotatePages`,
 `setPageBoxes` and `create`; the remaining methods do not accept an overwrite
 argument.
 

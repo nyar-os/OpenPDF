@@ -83,6 +83,15 @@ export interface NativeBinding {
     pdf_extract_text_bytes(bytes: Uint8Array): string;
     pdf_extract_images_bytes(bytes: Uint8Array, outDir: string, stem: string): string;
     pdf_stamp(path: string, out: string, requestJson: string): string;
+    pdf_stamp_page_numbers(
+        path: string,
+        pages: string,
+        start: number,
+        format: string,
+        position: string,
+        out: string,
+        overwrite: boolean,
+    ): string;
 }
 
 let cached: NativeBinding | null | undefined;

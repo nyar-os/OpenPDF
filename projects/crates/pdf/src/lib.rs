@@ -824,6 +824,81 @@ pub fn swap_pages(path: &Path, pages: &str, with: &str, out: &Path, overwrite: b
     }))
 }
 
+/// Stamps sequential page numbers on the selected pages of one PDF.
+///
+/// `pages` expands the same way as [`reverse_pages`]; the first selected page
+/// is numbered `start` and every following page counts up, so the last number
+/// is `start + selected - 1`. `format` accepts `{page}` and `{pages}` and
+/// defaults to `{page} of {pages}`; the numbers are substituted here, so the
+/// stamped text never follows the source page count. `position` is `center`,
+/// `top` or `bottom` and defaults to `bottom`. The output is replaced when it
+/// already exists only if `overwrite` is true.
+pub fn stamp_page_numbers(
+    path: &Path,
+    pages: &str,
+    start: u32,
+    format: Option<&str>,
+    position: Option<&str>,
+    out: &Path,
+    overwrite: bool,
+) -> Result<Value, ServiceError> {
+    if start < 1 {
+        return Err(invalid_pages("`start` must be at least 1"));
+    }
+    let format = format.unwrap_or("{page} of {pages}");
+    if format.trim().is_empty() {
+        return Err(invalid_pages("`format` must not be empty"));
+    }
+    let position = position.unwrap_or("bottom");
+    if !matches!(position, "center" | "top" | "bottom") {
+        return Err(invalid_pages("`position` must be `center`, `top` or `bottom`"));
+    }
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    let total = document_pdf::inspect(path)?.pages;
+    let selected = parse_page_ranges(pages, total)?;
+    let last = start + selected.len() as u32 - 1;
+    // `stamp` substitutes `{page}` with the source page number, so every
+    // number is resolved here and the pages are chained one stamp at a time.
+    let mut temporaries = Vec::new();
+    let outcome = (|| -> Result<(), ServiceError> {
+        let mut current = path.to_path_buf();
+        for (ordinal, page) in selected.iter().enumerate() {
+            let number = start + ordinal as u32;
+            let request = StampRequest {
+                text: format.replace("{page}", &number.to_string()).replace("{pages}", &last.to_string()),
+                position: Some(position.to_string()),
+                pages: Some(page.to_string()),
+                ..StampRequest::default()
+            };
+            let next = if ordinal + 1 == selected.len() { out.to_path_buf() } else { temporary_path() };
+            document_pdf::stamp(&current, &next, &request)?;
+            if next.as_path() != out {
+                temporaries.push(next.clone());
+            }
+            current = next;
+        }
+        Ok(())
+    })();
+    for temporary in &temporaries {
+        let _ = fs::remove_file(temporary);
+    }
+    outcome?;
+    Ok(json!({
+        "path": out.display().to_string(),
+        "pages": total,
+        "numbered": selected,
+        "start": start,
+        "last": last,
+        "format": format,
+        "position": position,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -896,6 +971,7 @@ pub fn capabilities() -> serde_json::Value {
             "setBookmarks": "supported",
             "fillForm": "supported",
             "stamp": "supported",
+            "stampPageNumbers": "supported",
             "extractText": "partial",
             "extractTextPages": "supported",
             "search": "partial",

@@ -42,6 +42,7 @@ import type {
     SetMetadataReport,
     SetPageBoxesReport,
     SplitReport,
+    StampPageNumbersReport,
     StampReport,
     StampRequest,
     SwapPagesReport,
@@ -430,6 +431,28 @@ export function stamp(path: string, out: string, request: StampRequest): StampRe
                 pages: request.pages,
             }),
         ),
+    );
+}
+
+/**
+ * Stamps sequential page numbers on the selected one-based pages.
+ *
+ * The first selected page is numbered `start` and every following page counts
+ * up. `format` accepts `{page}` and `{pages}` and defaults to
+ * `{page} of {pages}`; `position` is `center`, `top` or `bottom` and defaults
+ * to `bottom`.
+ */
+export function stampPageNumbers(
+    path: string,
+    pages: string,
+    start: number,
+    format: string | undefined,
+    position: string | undefined,
+    out: string,
+    overwrite = false,
+): StampPageNumbersReport {
+    return decode<StampPageNumbersReport>(() =>
+        binding('stampPageNumbers').pdf_stamp_page_numbers(path, pages, start, format ?? '', position ?? '', out, overwrite),
     );
 }
 

@@ -27,6 +27,7 @@
             "fill-form": "Copy every page and fill AcroForm field values",
             "create": "Create a PDF with styled text pages",
             "stamp": "Paint a text watermark, header or footer onto selected pages",
+            "stamp-page-numbers": "Stamp sequential page numbers onto selected pages",
             "extract-text": "Extract text from content streams, including compressed ones",
             "search": "Search extracted text line by line",
             "extract-images": "Write embedded JPEG and PNG-encodable images to a directory"
@@ -82,6 +83,8 @@
             "opacity": "Stamp opacity from 0 to 1",
             "color": "Stamp colour as #RGB or #RRGGBB",
             "stamp-pages": "Comma-separated 1-based pages to stamp, e.g. 1-3,5",
+            "numbers-start": "Number printed on the first selected page (default 1)",
+            "numbers-format": "Number text; {page} and {pages} are substituted (default {page} of {pages})",
             "bookmark": "Outline entry as Title:Page (repeatable), e.g. \"Intro:1\"",
             "depth": "Zero-based nesting level for the bookmarks, default 0",
             "outline-depth": "Drop outline entries deeper than this level",

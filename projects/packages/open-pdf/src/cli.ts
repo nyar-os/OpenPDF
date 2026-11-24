@@ -1141,6 +1141,53 @@ cli
     });
 
 cli
+    .command('stamp-page-numbers', 'cli.cmd.stamp-page-numbers')
+    .option('--pages <list>', 'cli.opt.pages')
+    .option('--start <number>', 'cli.opt.numbers-start')
+    .option('--format <text>', 'cli.opt.numbers-format')
+    .option('--position <position>', 'cli.opt.position')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const out = text(options, 'out');
+        const pages = pageRanges(options, 'pages');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        if (pages === undefined || pages === null) {
+            ctx.fail('open-pdf.cli.stamp-args', {
+                message: '`--pages <list>` is required and must be 1-based ranges such as 1-3,5',
+            });
+            return 2;
+        }
+        const start = decimal(options, 'start');
+        if (start === null) {
+            ctx.fail('open-pdf.cli.stamp-args', { message: '`--start <number>` must be a number' });
+            return 2;
+        }
+        const report = await pdf.stampPageNumbers(
+            file,
+            pages,
+            start ?? 1,
+            text(options, 'format'),
+            text(options, 'position'),
+            out,
+            flag(options, 'overwrite'),
+        );
+        ctx.emitResult(
+            report,
+            `stamped ${report.path} numbered=${report.numbered.length} start=${report.start} last=${report.last}`,
+        );
+        return 0;
+    });
+
+cli
     .command('search', 'cli.cmd.search')
     .option('--limit <n>', 'cli.opt.limit')
     .option('--pages <ranges>', 'cli.opt.pages')
