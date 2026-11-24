@@ -3,8 +3,9 @@
  * Command-line assembly only.
  *
  * Every command maps options onto one method of `new OpenPDF()`; PDF semantics
- * stay native. Help text and errors come from `@wae/commander`, so the CLI does
- * not grow its own parser.
+ * stay native. Help text, exit codes and the `wae.cli-result/v0` envelope come
+ * from `@wae/commander`, so the CLI does not grow its own parser. SDK failures
+ * are relayed with their stable `OpenPdfError` code, never as prose.
  */
 
 import fs from 'node:fs';
@@ -12,9 +13,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createCli, type ParsedOptions } from '@wae/commander';
+import { CliError, createCli, type CommandContext, type ParsedOptions } from '@wae/commander';
 
-import { OpenPDF } from './index.js';
+import { isOpenPdfError, OpenPDF } from './index.js';
 import type {
     Bookmark,
     CropBox,
@@ -30,8 +31,30 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 const cli = createCli('open-pdf').locales(path.join(here, '..', 'locales')).intro('cli.intro');
 
-/** One session per process: the CLI is a consumer of the public API. */
-const pdf = new OpenPDF();
+/** One session per locale: `--locale` selects the copy, machine codes never change. */
+const sessions = new Map<string, OpenPDF>();
+
+function session(ctx: CommandContext): OpenPDF {
+    const locale = ctx.locale.length > 0 ? ctx.locale : 'en';
+    let pdf = sessions.get(locale);
+    if (pdf === undefined) {
+        pdf = new OpenPDF({ locale });
+        sessions.set(locale, pdf);
+    }
+    return pdf;
+}
+
+/** Runs one SDK call and relays `OpenPdfError` codes into the CLI envelope. */
+async function sdk<T>(ctx: CommandContext, work: (pdf: OpenPDF) => Promise<T> | T): Promise<T> {
+    try {
+        return await work(session(ctx));
+    } catch (error) {
+        if (isOpenPdfError(error)) {
+            throw CliError.from(error, error.code);
+        }
+        throw error;
+    }
+}
 
 export { cli };
 
@@ -198,7 +221,7 @@ cli
             return 0;
         }
         if (!fs.existsSync(file)) {
-            ctx.fail('open-pdf.cli.file-not-found', { message: `${file} does not exist` });
+            ctx.fail('open-pdf.cli.file-not-found', { message: `${file} does not exist`, file });
             return 1;
         }
         const result =
@@ -207,7 +230,7 @@ cli
                 : spawnSync(opener, [file], { stdio: 'ignore' });
         if (result.error || result.status !== 0) {
             const detail = result.error?.message ?? `exit ${result.status ?? 'unknown'}`;
-            ctx.fail('open-pdf.cli.open-failed', { message: `cannot open ${file} with ${opener}: ${detail}` });
+            ctx.fail('open-pdf.cli.open-failed', { message: `cannot open ${file} with ${opener}: ${detail}`, file, opener, detail });
             return 1;
         }
         ctx.emitResult({ path: file, opener, opened: true }, `opened ${file}`);
@@ -215,7 +238,7 @@ cli
     });
 
 cli.command('capabilities', 'cli.cmd.capabilities').actionCtx(async (_options, _args, ctx) => {
-    const matrix = await pdf.capabilities();
+    const matrix = await sdk(ctx, (pdf) => pdf.capabilities());
     ctx.emitResult(matrix, describeCapabilities(matrix));
     return 0;
 });
@@ -237,10 +260,10 @@ cli
                 ctx.fail('open-pdf.cli.stdin-empty', { message: 'no PDF bytes arrived on standard input' });
                 return 2;
             }
-            report = await pdf.inspectBytes(bytes);
+            report = await sdk(ctx, (pdf) => pdf.inspectBytes(bytes));
         }
         else {
-            report = await pdf.inspect(file as string);
+            report = await sdk(ctx, (pdf) => pdf.inspect(file as string));
         }
         ctx.emitResult(report, describeInspect(report));
         return 0;
@@ -260,7 +283,7 @@ cli
             ctx.fail('open-pdf.cli.depth-invalid', { message: '`--depth` must be a positive integer' });
             return 2;
         }
-        const report = await pdf.outline(file, { depth });
+        const report = await sdk(ctx, (pdf) => pdf.outline(file, { depth }));
         const human = report.count === 0
             ? `${report.path} pages=${report.pages} (no outline)`
             : [
@@ -279,7 +302,7 @@ cli
             ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
             return 2;
         }
-        const report = await pdf.metadata(file);
+        const report = await sdk(ctx, (pdf) => pdf.metadata(file));
         const metadata = report.metadata;
         const human = [
             `${report.path} pages=${report.pages}`,
@@ -314,11 +337,11 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = await pdf.merge(inputs, out, {
+        const report = await sdk(ctx, (pdf) => pdf.merge(inputs, out, {
             overwrite: flag(options, 'overwrite'),
             title: text(options, 'title'),
             pages: pages.length === 0 ? undefined : pages,
-        });
+        }));
         ctx.emitResult(
             report,
             `merged ${inputs.length} file(s) -> ${report.path} pages=${report.pages} bytes=${report.bytes}`,
@@ -362,16 +385,16 @@ cli
                 ctx.fail('open-pdf.cli.split-args', { message: '`--every <count>` must be a positive integer' });
                 return 2;
             }
-            report = await pdf.splitEvery(file, count, outDir);
+            report = await sdk(ctx, (pdf) => pdf.splitEvery(file, count, outDir));
         } else if (parts !== undefined) {
             const count = Number(parts);
             if (!Number.isSafeInteger(count) || count < 1) {
                 ctx.fail('open-pdf.cli.split-args', { message: '`--parts <count>` must be a positive integer' });
                 return 2;
             }
-            report = await pdf.splitParts(file, count, outDir);
+            report = await sdk(ctx, (pdf) => pdf.splitParts(file, count, outDir));
         } else {
-            report = await pdf.split(file, ranges as string, outDir);
+            report = await sdk(ctx, (pdf) => pdf.split(file, ranges as string, outDir));
         }
         ctx.emitResult(
             report,
@@ -394,7 +417,7 @@ cli
             ctx.fail('open-pdf.cli.split-args', { message: '`--out-dir <dir>` is required' });
             return 2;
         }
-        const report = await pdf.splitBookmarks(file, outDir);
+        const report = await sdk(ctx, (pdf) => pdf.splitBookmarks(file, outDir));
         ctx.emitResult(report, `split ${report.pages} pages into ${report.parts} files at bookmarks in ${report.outDir}`);
         return 0;
     });
@@ -433,7 +456,7 @@ cli
                 return 2;
             }
         }
-        const report = await pdf.arrange(file, out, { order, rotate, remove });
+        const report = await sdk(ctx, (pdf) => pdf.arrange(file, out, { order, rotate, remove }));
         ctx.emitResult(report, `arranged ${report.path} pages=${report.pages}`);
         return 0;
     });
@@ -461,7 +484,7 @@ cli
             });
             return 2;
         }
-        const report = await pdf.deletePages(file, pages, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.deletePages(file, pages, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `deleted ${report.path} pages=${report.pages} removed=${report.removed} bytes=${report.bytes}`,
@@ -499,7 +522,7 @@ cli
             ctx.fail('open-pdf.cli.times-args', { message: '`--times <count>` must be an integer of at least 2' });
             return 2;
         }
-        const report = await pdf.duplicatePages(file, pages, times, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.duplicatePages(file, pages, times, out, flag(options, 'overwrite')));
         ctx.emitResult(report, `duplicated ${report.path} pages=${report.pages} times=${report.times}`);
         return 0;
     });
@@ -547,14 +570,14 @@ cli
             }
             after = before - 1;
         }
-        const report = await pdf.insertPages(
+        const report = await sdk(ctx, (pdf) => pdf.insertPages(
             file,
             insert,
             after,
             out,
             flag(options, 'overwrite'),
             text(options, 'pages'),
-        );
+        ));
         ctx.emitResult(
             report,
             `inserted ${report.path} pages=${report.pages} at=${report.after} insertedPages=${report.insertedPages}`,
@@ -607,7 +630,7 @@ cli
             return 2;
         }
         const size = text(options, 'size');
-        const report = await pdf.insertBlankPages(file, after, count, size, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.insertBlankPages(file, after, count, size, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `inserted ${report.path} pages=${report.pages} after=${report.after} insertedPages=${report.insertedPages}`,
@@ -645,14 +668,14 @@ cli
             ctx.fail('open-pdf.cli.insert-args', { message: '`--insert <file>` is required' });
             return 2;
         }
-        const report = await pdf.replacePages(
+        const report = await sdk(ctx, (pdf) => pdf.replacePages(
             file,
             pages,
             insert,
             out,
             flag(options, 'overwrite'),
             text(options, 'source-pages'),
-        );
+        ));
         ctx.emitResult(
             report,
             `replaced ${report.path} pages=${report.pages} replacementPages=${report.replacementPages}`,
@@ -681,7 +704,7 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = await pdf.interleavePages(file, second, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.interleavePages(file, second, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `interleaved ${report.path} pages=${report.pages} first=${report.firstPages} second=${report.secondPages}`,
@@ -712,7 +735,7 @@ cli
             });
             return 2;
         }
-        const report = await pdf.reversePages(file, out, flag(options, 'overwrite'), pages ?? null);
+        const report = await sdk(ctx, (pdf) => pdf.reversePages(file, out, flag(options, 'overwrite'), pages ?? null));
         ctx.emitResult(report, `reversed ${report.path} pages=${report.pages}`);
         return 0;
     });
@@ -742,7 +765,7 @@ cli
             });
             return 2;
         }
-        const report = await pdf.swapPages(file, pages, withPages, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.swapPages(file, pages, withPages, out, flag(options, 'overwrite')));
         ctx.emitResult(report, `swapped ${report.path} pages=${report.pages}`);
         return 0;
     });
@@ -791,7 +814,7 @@ cli
             }
             after = before - 1;
         }
-        const report = await pdf.movePages(file, pages, after, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.movePages(file, pages, after, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `moved ${report.path} pages=${report.pages} after=${report.after} moved=${report.moved.join(',')}`,
@@ -822,7 +845,7 @@ cli
             });
             return 2;
         }
-        const report = await pdf.keepPages(file, pages, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.keepPages(file, pages, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `kept ${report.path} pages=${report.pages} removed=${report.removed} bytes=${report.bytes}`,
@@ -860,7 +883,7 @@ cli
             ctx.fail('open-pdf.cli.degrees-args', { message: '`--degrees` must be 90, 180 or 270' });
             return 2;
         }
-        const report = await pdf.rotatePages(file, pages, degrees, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.rotatePages(file, pages, degrees, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `rotated ${report.path} pages=${report.pages} rotated=${report.rotated} degrees=${degrees} bytes=${report.bytes}`,
@@ -899,7 +922,7 @@ cli
             });
             return 2;
         }
-        const report = await pdf.setPageBoxes(file, pages, box, out, flag(options, 'overwrite'));
+        const report = await sdk(ctx, (pdf) => pdf.setPageBoxes(file, pages, box, out, flag(options, 'overwrite')));
         ctx.emitResult(
             report,
             `boxed ${report.path} pages=${report.pages} cropped=${report.cropped} box=${box.join(',')} bytes=${report.bytes}`,
@@ -927,14 +950,14 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = await pdf.setMetadata(file, out, {
+        const report = await sdk(ctx, (pdf) => pdf.setMetadata(file, out, {
             title: text(options, 'title'),
             author: text(options, 'author'),
             subject: text(options, 'subject'),
             keywords: text(options, 'keywords'),
             creator: text(options, 'creator'),
             producer: text(options, 'producer'),
-        });
+        }));
         const metadata = report.metadata;
         const human = [
             `updated ${report.path} pages=${report.pages}`,
@@ -963,7 +986,7 @@ cli
             ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
             return 2;
         }
-        const report = await pdf.clearMetadata(file, out);
+        const report = await sdk(ctx, (pdf) => pdf.clearMetadata(file, out));
         ctx.emitResult(report, `cleared ${report.path} pages=${report.pages} metadata=(none)`);
         return 0;
     });
@@ -1014,7 +1037,7 @@ cli
             }
             bookmarks.push({ title, page, depth });
         }
-        const report = await pdf.setBookmarks(file, out, bookmarks);
+        const report = await sdk(ctx, (pdf) => pdf.setBookmarks(file, out, bookmarks));
         const human = [
             `bookmarks ${report.path} pages=${report.pages} entries=${report.bookmarks}`,
             ...bookmarks.map((bookmark) => `${'  '.repeat(bookmark.depth ?? 0)}${bookmark.title} -> page ${bookmark.page}`),
@@ -1056,7 +1079,7 @@ cli
             const raw = entry.slice(separator + 1);
             values[name] = raw === 'true' ? true : raw === 'false' ? false : raw;
         }
-        const report = await pdf.fillForm(file, out, values);
+        const report = await sdk(ctx, (pdf) => pdf.fillForm(file, out, values));
         const human = [
             `filled ${report.path} pages=${report.pages} filled=${report.filled.length} missing=${report.missing.length}`,
             ...report.filled.map((name) => `  ${name}`),
@@ -1108,7 +1131,7 @@ cli
             ctx.fail('open-pdf.cli.create-style', { message: '`--margin <pt>` must be a number' });
             return 2;
         }
-        const report = await pdf.create({
+        const report = await sdk(ctx, (pdf) => pdf.create({
             out,
             title: text(options, 'title'),
             pages,
@@ -1123,7 +1146,7 @@ cli
             keywords: text(options, 'keywords'),
             creator: text(options, 'creator'),
             pageNumbers: flag(options, 'page-numbers'),
-        });
+        }));
         ctx.emitResult(report, `created ${report.path} pages=${report.pages} bytes=${report.bytes}`);
         return 0;
     });
@@ -1171,7 +1194,7 @@ cli
             | 'header'
             | 'footer'
             | undefined;
-        const report = await pdf.stamp(file, out, {
+        const report = await sdk(ctx, (pdf) => pdf.stamp(file, out, {
             text: stampText,
             position,
             font: text(options, 'font'),
@@ -1180,7 +1203,7 @@ cli
             opacity: opacity ?? undefined,
             color: text(options, 'color'),
             pages: text(options, 'pages'),
-        });
+        }));
         ctx.emitResult(
             report,
             `stamped ${report.path} pages=${report.pages} stamped=${report.pagesStamped} bytes=${report.bytes}`,
@@ -1219,7 +1242,7 @@ cli
             ctx.fail('open-pdf.cli.stamp-args', { message: '`--start <number>` must be a number' });
             return 2;
         }
-        const report = await pdf.stampPageNumbers(
+        const report = await sdk(ctx, (pdf) => pdf.stampPageNumbers(
             file,
             pages,
             start ?? 1,
@@ -1227,7 +1250,7 @@ cli
             text(options, 'position'),
             out,
             flag(options, 'overwrite'),
-        );
+        ));
         ctx.emitResult(
             report,
             `stamped ${report.path} numbered=${report.numbered.length} start=${report.start} last=${report.last}`,
@@ -1269,13 +1292,13 @@ cli
             }
             skip = parsed;
         }
-        const report = await pdf.search(file, query, {
+        const report = await sdk(ctx, (pdf) => pdf.search(file, query, {
             limit,
             pages: text(options, 'pages'),
             matchCase: !flag(options, 'ignore-case'),
             wholeWord: flag(options, 'whole-word'),
             skip,
-        });
+        }));
         const scope = report.selected === undefined ? '' : ` pages=${report.selected.join(',')}`;
         const lines = report.hits.map((hit) => `${hit.line}:${hit.column} ${hit.match}`);
         ctx.emitResult(
@@ -1308,10 +1331,10 @@ cli
                 ctx.fail('open-pdf.cli.stdin-empty', { message: 'no PDF bytes arrived on standard input' });
                 return 2;
             }
-            report = await pdf.extractTextBytes(bytes);
+            report = await sdk(ctx, (pdf) => pdf.extractTextBytes(bytes));
         }
         else {
-            report = await pdf.extractText(file as string, pages === undefined ? {} : { pages });
+            report = await sdk(ctx, (pdf) => pdf.extractText(file as string, pages === undefined ? {} : { pages }));
         }
         const losses = report.losses.map((loss) => `loss ${loss.code} page=${loss.page} ${loss.message}`);
         const human = [report.markdown.length > 0 ? report.markdown : '(no text extracted)', ...losses].join('\n');
@@ -1349,10 +1372,10 @@ cli
                 ctx.fail('open-pdf.cli.stdin-empty', { message: 'no PDF bytes arrived on standard input' });
                 return 2;
             }
-            images = await pdf.extractImagesBytes(bytes, outDir, text(options, 'name') ?? 'stdin');
+            images = await sdk(ctx, (pdf) => pdf.extractImagesBytes(bytes, outDir, text(options, 'name') ?? 'stdin'));
         }
         else {
-            images = await pdf.extractImages(file as string, outDir, pages === undefined ? {} : { pages });
+            images = await sdk(ctx, (pdf) => pdf.extractImages(file as string, outDir, pages === undefined ? {} : { pages }));
         }
         const human = images.length === 0
             ? '(no images found)'
@@ -1375,7 +1398,7 @@ cli
             ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
             return 2;
         }
-        const report = await pdf.extractLinks(file);
+        const report = await sdk(ctx, (pdf) => pdf.extractLinks(file));
         const human = report.count === 0
             ? '(no links found)'
             : report.links
