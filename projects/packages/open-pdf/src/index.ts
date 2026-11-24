@@ -10,6 +10,7 @@
  */
 
 import * as service from './service.js';
+import { setErrorLocale } from './errors.js';
 import type {
     ArrangeReport,
     ArrangeRequest,
@@ -51,8 +52,8 @@ import type {
     SwapPagesReport,
 } from './types.js';
 
-export { OpenPdfError, NotImplementedError, errorCodes, isOpenPdfError } from './errors.js';
-export type { OpenPdfErrorCode, OpenPdfErrorDetails, OpenPdfErrorOptions } from './errors.js';
+export { OpenPdfError, NotImplementedError, errorCodes, isOpenPdfError, renderErrorCopy, setErrorLocale } from './errors.js';
+export type { OpenPdfErrorCode, OpenPdfErrorDetails, OpenPdfErrorOptions, OpenPdfErrorParams } from './errors.js';
 export { documentFormats, formatFromPath, formatInfo, isPdfPath } from './formats.js';
 export type { PdfFormat, PdfFormatInfo } from './formats.js';
 export type * from './types.js';
@@ -74,6 +75,7 @@ export class OpenPDF {
     constructor(options: OpenPDFOptions = {}) {
         this.locale = options.locale ?? 'en';
         this.defaultOverwrite = options.overwrite ?? false;
+        setErrorLocale(this.locale);
     }
 
     /** Reads the capability matrix of the installed addon. */

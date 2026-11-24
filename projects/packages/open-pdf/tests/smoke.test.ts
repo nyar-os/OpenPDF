@@ -7,6 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -94,9 +95,41 @@ test('the stable error code set is exported', () => {
         'io/write',
         'io/exists',
         'capability/not-implemented',
+        'binding/failure',
     ]);
     assert.equal(new OpenPdfError('io/exists', 'exists').code, 'io/exists');
     assert.equal(OpenPdfError.prototype instanceof Error, true);
+});
+
+test('binding failures surface their real code, never a format/invalid catch-all', { skip: withoutAddon }, () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        // A missing file is an `io/read`, not the old `format/invalid` fallback.
+        assert.throws(
+            () => OpenPDF.inspect(path.join(dir, 'absent.pdf')),
+            (error: unknown) => {
+                assert.ok(error instanceof OpenPdfError);
+                assert.equal(error.code, 'io/read');
+                assert.notEqual(error.code, 'format/invalid');
+                return true;
+            },
+        );
+
+        // A rejected argument is `session/argument-invalid`, again not format/invalid.
+        const source = path.join(dir, 'source.pdf');
+        OpenPDF.create({ out: source, pages: ['One', 'Two'], overwrite: true });
+        assert.throws(
+            () => OpenPDF.rotatePages(source, '1', 45, path.join(dir, 'rotated.pdf')),
+            (error: unknown) => {
+                assert.ok(error instanceof OpenPdfError);
+                assert.equal(error.code, 'session/argument-invalid');
+                assert.notEqual(error.code, 'format/invalid');
+                return true;
+            },
+        );
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 test('deletePages drops the selected pages', { skip: withoutAddon }, async () => {
