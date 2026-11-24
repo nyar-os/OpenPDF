@@ -166,6 +166,16 @@ fn pdf_split_parts(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Splits one PDF file at its top-level bookmarks.
+#[function]
+fn pdf_split_bookmarks(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let out_dir = text(&ctx, 1)?;
+    let report = open_pdf_core::split_bookmarks(std::path::Path::new(&path), std::path::Path::new(&out_dir))
+        .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Reorders, removes and rotates pages into a new PDF.
 #[function]
 fn pdf_arrange(ctx: CallContext) -> Result<JsValue> {
@@ -592,6 +602,7 @@ register_module![
     pdf_split,
     pdf_split_every,
     pdf_split_parts,
+    pdf_split_bookmarks,
     pdf_arrange,
     pdf_delete_pages,
     pdf_duplicate_pages,

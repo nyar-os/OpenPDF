@@ -9,6 +9,7 @@
             "metadata": "Print the document information dictionary",
             "merge": "Concatenate PDF files in argument order",
             "split": "Write one file per page range or per N pages",
+            "split-bookmarks": "Split the document into files that start at each top-level bookmark",
             "arrange": "Reorder, remove and rotate pages into a new PDF",
             "delete-pages": "Remove the selected pages into a new PDF",
             "duplicate-pages": "Repeat the selected pages directly after themselves",

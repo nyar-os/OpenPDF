@@ -14,7 +14,7 @@ use open_pdf_core::{
     set_bookmarks,
     set_metadata,
     split_parts,
-    set_page_boxes, split, stamp,
+    set_page_boxes, split, split_bookmarks, stamp,
     stamp_page_numbers,
     swap_pages,
 };
@@ -304,6 +304,85 @@ fn split_parts_balances_page_counts_with_earlier_remainders() {
 
     assert_invalid(split_parts(&path, 0, &workspace.path("empty")), "session/argument-invalid");
     assert_invalid(split_parts(&path, 8, &workspace.path("many")), "session/argument-invalid");
+}
+
+#[test]
+fn split_bookmarks_cuts_the_document_at_each_top_level_entry() {
+    let workspace = Workspace::new();
+    let source = workspace.create("deck.pdf", None, &["One", "Two", "Three", "Four", "Five", "Six"]);
+    let outlined = workspace.path("outlined.pdf");
+    set_bookmarks(
+        &source,
+        &outlined,
+        &[
+            Bookmark { title: "Intro".to_string(), page: 1, depth: None },
+            Bookmark { title: "Chapter".to_string(), page: 3, depth: None },
+            Bookmark { title: "Appendix".to_string(), page: 5, depth: None },
+        ],
+    )
+    .expect("set bookmarks");
+
+    let out_dir = workspace.path("by-bookmarks");
+    let report = split_bookmarks(&outlined, &out_dir).expect("split at bookmarks");
+    assert_eq!(report["outDir"], json!(out_dir.display().to_string()));
+    assert_eq!(report["pages"], json!(6));
+    assert_eq!(report["parts"], json!(3));
+    let boundaries = report["boundaries"].as_array().expect("boundaries");
+    let entries: Vec<(&str, u64)> = boundaries
+        .iter()
+        .map(|entry| (entry["title"].as_str().expect("title"), entry["page"].as_u64().expect("page")))
+        .collect();
+    assert_eq!(entries, [("Intro", 1), ("Chapter", 3), ("Appendix", 5)]);
+    let documents = report["documents"].as_array().expect("documents");
+    assert_eq!(documents.len(), 3);
+    for part in documents {
+        assert_eq!(part["pages"], json!(2));
+    }
+
+    let first = extract_text(Path::new(documents[0]["path"].as_str().expect("path"))).expect("extract first");
+    assert!(first.markdown.contains("One") && first.markdown.contains("Two"), "{:?}", first.markdown);
+    assert!(!first.markdown.contains("Three"), "{:?}", first.markdown);
+    let last = extract_text(Path::new(documents[2]["path"].as_str().expect("path"))).expect("extract last");
+    assert!(last.markdown.contains("Five") && last.markdown.contains("Six"), "{:?}", last.markdown);
+    assert!(!last.markdown.contains("Four"), "{:?}", last.markdown);
+}
+
+#[test]
+fn split_bookmarks_prepends_the_lead_in_and_rejects_bad_outlines() {
+    let workspace = Workspace::new();
+    let source = workspace.create("deck.pdf", None, &["One", "Two", "Three", "Four", "Five", "Six"]);
+    let outlined = workspace.path("outlined.pdf");
+    set_bookmarks(
+        &source,
+        &outlined,
+        &[
+            Bookmark { title: "Middle".to_string(), page: 2, depth: None },
+            Bookmark { title: "Late".to_string(), page: 5, depth: None },
+        ],
+    )
+    .expect("set bookmarks");
+
+    let report = split_bookmarks(&outlined, &workspace.path("offset")).expect("split with a lead-in");
+    assert_eq!(report["parts"], json!(3));
+    let documents = report["documents"].as_array().expect("documents");
+    assert_eq!(documents[0]["pages"], json!(1));
+    assert_eq!(documents[1]["pages"], json!(3));
+    assert_eq!(documents[2]["pages"], json!(2));
+
+    let plain = workspace.create("plain.pdf", None, &["Only"]);
+    assert_invalid(split_bookmarks(&plain, &workspace.path("no-bookmarks")), "session/argument-invalid");
+
+    let broken = workspace.write(
+        "broken.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R /Outlines 4 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>",
+            "<< /Type /Outlines /First 5 0 R /Last 5 0 R /Count 1 >>",
+            "<< /Title (Ghost) /Parent 4 0 R >>",
+        ]),
+    );
+    assert_invalid(split_bookmarks(&broken, &workspace.path("broken-split")), "session/argument-invalid");
 }
 
 #[test]

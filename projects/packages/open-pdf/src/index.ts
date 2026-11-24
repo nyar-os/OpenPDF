@@ -41,6 +41,7 @@ import type {
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
+    SplitBookmarksReport,
     SplitReport,
     StampPageNumbersReport,
     StampReport,
@@ -115,6 +116,11 @@ export class OpenPDF {
     /** Splits one PDF into `parts` consecutive files, balancing page counts. */
     async splitParts(path: string, parts: number, outDir: string): Promise<SplitReport> {
         return service.splitParts(path, parts, outDir);
+    }
+
+    /** Splits the document into files that start at each top-level bookmark. */
+    async splitBookmarks(path: string, outDir: string): Promise<SplitBookmarksReport> {
+        return service.splitBookmarks(path, outDir);
     }
 
     /** Reorders, removes and rotates pages into a new PDF. */
@@ -401,6 +407,11 @@ export class OpenPDF {
     /** Splits one PDF into `parts` consecutive files, balancing page counts. */
     static splitParts(path: string, parts: number, outDir: string): SplitReport {
         return service.splitParts(path, parts, outDir);
+    }
+
+    /** Splits the document into files that start at each top-level bookmark. */
+    static splitBookmarks(path: string, outDir: string): SplitBookmarksReport {
+        return service.splitBookmarks(path, outDir);
     }
 
     /** Reorders, removes and rotates pages into a new PDF. */

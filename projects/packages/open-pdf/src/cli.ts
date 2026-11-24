@@ -381,6 +381,25 @@ cli
     });
 
 cli
+    .command('split-bookmarks', 'cli.cmd.split-bookmarks')
+    .option('-o, --out-dir <dir>', 'cli.opt.out-dir')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const outDir = text(options, 'out-dir');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (outDir === undefined) {
+            ctx.fail('open-pdf.cli.split-args', { message: '`--out-dir <dir>` is required' });
+            return 2;
+        }
+        const report = await pdf.splitBookmarks(file, outDir);
+        ctx.emitResult(report, `split ${report.pages} pages into ${report.parts} files at bookmarks in ${report.outDir}`);
+        return 0;
+    });
+
+cli
     .command('arrange', 'cli.cmd.arrange')
     .option('-o, --out <file>', 'cli.opt.out')
     .option('--order <list>', 'cli.opt.order')

@@ -41,6 +41,7 @@ import type {
     RotatePagesReport,
     SetMetadataReport,
     SetPageBoxesReport,
+    SplitBookmarksReport,
     SplitReport,
     StampPageNumbersReport,
     StampReport,
@@ -137,6 +138,17 @@ export function splitEvery(path: string, every: number, outDir: string): SplitRe
  */
 export function splitParts(path: string, parts: number, outDir: string): SplitReport {
     return decode<SplitReport>(() => binding('splitParts').pdf_split_parts(path, parts, outDir));
+}
+
+/**
+ * Splits one PDF into files that start at each top-level bookmark.
+ *
+ * Every level-one outline entry names the page where a new file begins; pages
+ * before the first bookmark form their own file when there are any. A
+ * document without top-level bookmarks fails with `session/argument-invalid`.
+ */
+export function splitBookmarks(path: string, outDir: string): SplitBookmarksReport {
+    return decode<SplitBookmarksReport>(() => binding('splitBookmarks').pdf_split_bookmarks(path, outDir));
 }
 
 /** Reorders, removes and rotates pages into a new PDF. */

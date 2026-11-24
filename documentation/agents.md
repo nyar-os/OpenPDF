@@ -30,6 +30,7 @@ open-pdf outline <file> [--depth <n>]
 open-pdf metadata <file>
 open-pdf merge <file...> -o <out> [--title <text>] [--pages <ranges>...] [--overwrite]
 open-pdf split <file> -o <out-dir> (--ranges <list> | --every <count> | --parts <count>)
+open-pdf split-bookmarks <file> -o <out-dir>
 open-pdf arrange <file> -o <out> [--order <list>] [--remove <list>] [--rotate <degrees>]
 open-pdf delete-pages <file> --pages <list> -o <out> [--overwrite]
 open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--overwrite]
@@ -110,6 +111,11 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
 - `--every` must be a positive integer.
 - `--parts` splits into exactly that many files, balancing pages so earlier
   files take the remainder; it must be between `1` and the page count.
+- `split-bookmarks` cuts at the top-level outline entries: each level-one
+  bookmark starts a new file and pages before the first bookmark form their
+  own file. A document without top-level bookmarks, or a bookmark whose
+  destination does not resolve to a page of the document, fails with
+  `session/argument-invalid` before anything is written.
 - `--times` on `duplicate-pages` is the number of copies written for each
   selected page, between `2` and `100`; the default is `2`.
 - `--insert` on `insert-pages` and `replace-pages` is the PDF whose pages are
@@ -208,6 +214,7 @@ Report shapes:
 | `merge` | `{ path, pages, bytes, sources }`; each source reports `{ path, pages, selected, ranges }` |
 | `split` | `{ documents: [{ path, pages }] }` |
 | `split --parts` | `{ outDir, parts, pages, documents: [{ path, pages }] }` |
+| `split-bookmarks` | `{ outDir, pages, parts, boundaries: [{ title, page }], documents: [{ path, pages }] }` |
 | `arrange` | `{ path, pages }` |
 | `delete-pages` | `{ path, pages, removed, bytes }` |
 | `duplicate-pages` | `{ path, pages, sourcePages, duplicated, times }` |
@@ -309,7 +316,8 @@ transformations never read from stdin, and `split` always reads a path.
 When a guarded output already exists and overwrite is not allowed, the operation
 fails with `io/exists`; nothing is replaced in place.
 
-`split`, `arrange`, `set-metadata`, `clear-metadata`, `bookmarks`, `fill-form` and `stamp` expose
+`split`, `split-bookmarks`, `arrange`, `set-metadata`, `clear-metadata`,
+`bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
 default for `merge`, `deletePages`, `duplicatePages`, `insertPages`,
 `insertBlankPages`, `replacePages`, `reversePages`, `swapPages`,

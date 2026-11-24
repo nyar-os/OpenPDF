@@ -21,6 +21,7 @@ export interface NativeBinding {
     pdf_split(path: string, ranges: string, outDir: string): string;
     pdf_split_every(path: string, every: number, outDir: string): string;
     pdf_split_parts(path: string, parts: number, outDir: string): string;
+    pdf_split_bookmarks(path: string, outDir: string): string;
     pdf_arrange(path: string, out: string, opsJson: string): string;
     pdf_delete_pages(path: string, pages: string, out: string, overwrite: boolean): string;
     pdf_duplicate_pages(path: string, pages: string, times: number, out: string, overwrite: boolean): string;

@@ -9,6 +9,7 @@ repository.workspace = true
 description = "PDF parsing, creation, merge, split and metadata extraction"
 
 [dependencies]
+data-binary-pdf = { workspace = true }
 document-pdf = { workspace = true }
 serde_json = { workspace = true }
 

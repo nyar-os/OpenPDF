@@ -123,6 +123,7 @@ export interface PdfCapabilities {
         readonly merge: SupportLevel;
         readonly split: SupportLevel;
         readonly splitParts: SupportLevel;
+        readonly splitBookmarks: SupportLevel;
         readonly arrange: SupportLevel;
         readonly movePages: SupportLevel;
         readonly deletePages: SupportLevel;
@@ -214,6 +215,18 @@ export interface ArrangeRequest {
     readonly rotate?: number;
     /** Input pages to drop before applying `order`. */
     readonly remove?: readonly number[];
+}
+
+/** Result of `splitBookmarks()`. */
+export interface SplitBookmarksReport {
+    readonly outDir: string;
+    /** Pages in the source document. */
+    readonly pages: number;
+    /** Files written; one per range between consecutive bookmark pages. */
+    readonly parts: number;
+    /** Top-level outline entries in document order, with 1-based pages. */
+    readonly boundaries: readonly { readonly title: string; readonly page: number }[];
+    readonly documents: readonly SplitPart[];
 }
 
 /** Result of `arrange()`. */
