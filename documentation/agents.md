@@ -105,6 +105,13 @@ Run `tsx build.ts` (or the project's TypeScript runner) from a directory that
 contains the input PDFs. Failure codes such as `session/argument-invalid` or
 `io/exists` are stable and worth branching on.
 
+The workflow above exists verbatim as
+[`projects/packages/open-pdf/examples/report-workflow.ts`](../projects/packages/open-pdf/examples/report-workflow.ts):
+it builds its own cover, body and AcroForm fixtures, asserts the page order
+after a selection-free `reversePages`, reports `filled` and `missing` field
+names and reopens the stamped delivery. CI runs it against the real engine via
+`pnpm --filter @wae/open-pdf run example` after `build:test`.
+
 ## Flag values
 
 - `<list>` page ranges are 1-based and comma-separated, for example `1-3,5`.

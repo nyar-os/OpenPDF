@@ -1,0 +1,48 @@
+name: TypeScript
+
+on:
+  push:
+    branches: [ master, dev ]
+  pull_request:
+    branches: [ master, dev ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+
+  examples:
+    name: examples (staged binding)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build the native binding
+        run: cargo build -p open-pdf-napi
+      - name: Stage the addon under the extension Node loads
+        run: cp target/debug/libopen_pdf_napi.so target/debug/open_pdf_napi.node
+      - name: Compile the package sources
+        run: pnpm --filter @wae/open-pdf run build:test
+      - name: Run the report workflow example against the real engine
+        run: pnpm --filter @wae/open-pdf run example
+        env:
+          OPEN_PDF_NATIVE: ${{ github.workspace }}/target/debug/open_pdf_napi.node
