@@ -21,6 +21,7 @@ import type {
     DeletePagesReport,
     DuplicatePagesReport,
     ExtractedImage,
+    ExtractLinksReport,
     ExtractReport,
     FormFillReport,
     FormValue,
@@ -77,6 +78,11 @@ export class OpenPDF {
     /** Reads the capability matrix of the installed addon. */
     async capabilities(): Promise<PdfCapabilities> {
         return service.capabilities();
+    }
+
+    /** Lists every link annotation one PDF carries. */
+    async extractLinks(path: string): Promise<ExtractLinksReport> {
+        return service.extractLinks(path);
     }
 
     /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
@@ -372,6 +378,11 @@ export class OpenPDF {
     /** Reads the capability matrix of the installed addon. */
     static capabilities(): PdfCapabilities {
         return service.capabilities();
+    }
+
+    /** Lists every link annotation one PDF carries. */
+    static extractLinks(path: string): ExtractLinksReport {
+        return service.extractLinks(path);
     }
 
     /** Reads version, pages, metadata, page sizes and outlines from one PDF. */

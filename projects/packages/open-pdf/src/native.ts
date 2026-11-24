@@ -93,6 +93,7 @@ export interface NativeBinding {
         out: string,
         overwrite: boolean,
     ): string;
+    pdf_extract_links(path: string): string;
 }
 
 let cached: NativeBinding | null | undefined;

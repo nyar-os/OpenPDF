@@ -21,6 +21,7 @@ import type {
     DeletePagesReport,
     DuplicatePagesReport,
     ExtractedImage,
+    ExtractLinksReport,
     ExtractReport,
     FormFillReport,
     FormValue,
@@ -90,6 +91,18 @@ export function version(): string {
 /** Reads the capability matrix of the installed addon. */
 export function capabilities(): PdfCapabilities {
     return decode<PdfCapabilities>(() => binding('capabilities').capabilities());
+}
+
+/**
+ * Lists every link annotation one PDF carries.
+ *
+ * Each entry reports the 1-based `page`, the annotation `rect`, the external
+ * `uri` for URI actions and the 1-based `destination` page for internal GoTo
+ * targets; `uri` and `destination` are `null` when the target is absent or
+ * cannot be resolved.
+ */
+export function extractLinks(path: string): ExtractLinksReport {
+    return decode<ExtractLinksReport>(() => binding('extractLinks').pdf_extract_links(path));
 }
 
 /** Reads version, pages, metadata, page sizes and outlines from one PDF. */

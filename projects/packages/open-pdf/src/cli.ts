@@ -1338,6 +1338,30 @@ cli
         return 0;
     });
 
+cli
+    .command('extract-links', 'cli.cmd.extract-links')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        const report = await pdf.extractLinks(file);
+        const human = report.count === 0
+            ? '(no links found)'
+            : report.links
+                  .map((link) =>
+                      link.uri !== null
+                          ? `page=${link.page} uri=${link.uri}`
+                          : link.destination !== null
+                              ? `page=${link.page} -> page ${link.destination}`
+                              : `page=${link.page} (no target)`,
+                  )
+                  .join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
 const entry = process.argv[1];
 if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
     const code = await cli.parse(process.argv);

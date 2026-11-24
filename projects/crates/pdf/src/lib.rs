@@ -964,6 +964,109 @@ pub fn split_bookmarks(path: &Path, out_dir: &Path) -> Result<Value, ServiceErro
     }))
 }
 
+/// Lists every link annotation a PDF carries.
+///
+/// The `/Annots` arrays of all pages are read directly and every `/Link`
+/// annotation is reported once, in page order and then annotation order. An
+/// entry carries the one-based `page`, the annotation `rect` when it is four
+/// numbers, the external `uri` for URI actions and the one-based
+/// `destination` page for internal `GoTo` targets, whether the target sits in
+/// an `/A` action or a direct `/Dest`. `uri` and `destination` are `null` when
+/// the annotation has no resolvable target.
+pub fn extract_links(path: &Path) -> Result<Value, ServiceError> {
+    let bytes = fs::read(path)
+        .map_err(|error| ServiceError::new("io/read", format!("failed to read {}: {error}", path.display())))?;
+    let document = data_binary_pdf::parse_document(&bytes)
+        .map_err(|error| ServiceError::new("format/invalid", format!("{} is not a readable PDF: {error}", path.display())))?;
+    let mut links: Vec<Value> = Vec::new();
+    for (index, page) in document.pages.iter().enumerate() {
+        let annotations = page
+            .own
+            .get("Annots")
+            .and_then(|annots| resolve_document(&document, annots))
+            .and_then(data_binary_pdf::PdfObject::as_array);
+        for annotation in annotations.unwrap_or_default() {
+            let Some(annotation) =
+                resolve_document(&document, annotation).and_then(data_binary_pdf::PdfObject::as_dict)
+            else {
+                continue;
+            };
+            if annotation.get("Subtype").and_then(data_binary_pdf::PdfObject::as_name) != Some("Link") {
+                continue;
+            }
+            let rect = annotation
+                .get("Rect")
+                .and_then(|rect| resolve_document(&document, rect))
+                .and_then(data_binary_pdf::PdfObject::as_array)
+                .filter(|values| values.len() == 4)
+                .map(|values| values.iter().filter_map(object_number).collect::<Vec<f64>>())
+                .filter(|numbers| numbers.len() == 4);
+            let mut uri: Option<String> = None;
+            let mut destination: Option<usize> = None;
+            if let Some(action) =
+                annotation.get("A").and_then(|action| resolve_document(&document, action)).and_then(|action| action.as_dict())
+            {
+                match action.get("S").and_then(data_binary_pdf::PdfObject::as_name) {
+                    Some("URI") => {
+                        if let Some(data_binary_pdf::PdfObject::String(text)) = action.get("URI") {
+                            uri = Some(data_binary_pdf::decode_text_string(text));
+                        }
+                    }
+                    Some("GoTo") => {
+                        if let Some(target) = action.get("D") {
+                            destination = destination_page(&document, target);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if uri.is_none() && destination.is_none() {
+                if let Some(target) = annotation.get("Dest") {
+                    destination = destination_page(&document, target);
+                }
+            }
+            links.push(json!({
+                "page": index + 1,
+                "rect": rect,
+                "uri": uri,
+                "destination": destination,
+            }));
+        }
+    }
+    Ok(json!({
+        "path": path.display().to_string(),
+        "pages": document.pages.len(),
+        "count": links.len(),
+        "links": links,
+    }))
+}
+
+/// Reads an integer or real object as a number.
+fn object_number(object: &data_binary_pdf::PdfObject) -> Option<f64> {
+    match object {
+        data_binary_pdf::PdfObject::Integer(value) => Some(*value as f64),
+        data_binary_pdf::PdfObject::Real(value) => Some(*value),
+        _ => None,
+    }
+}
+
+/// Reports the one-based page a link or bookmark destination points at.
+///
+/// A destination may be an array whose first element names the page or a
+/// direct reference to the page dictionary; named destinations and anything
+/// that does not resolve to a page of this document yield `None`.
+fn destination_page(document: &data_binary_pdf::PdfDocument, destination: &data_binary_pdf::PdfObject) -> Option<usize> {
+    let page_object = match destination {
+        data_binary_pdf::PdfObject::Array(values) => values.first()?,
+        other => other,
+    };
+    let resolved = resolve_document(document, page_object)?;
+    let data_binary_pdf::PdfObject::Dictionary(dict) = resolved else {
+        return None;
+    };
+    document.pages.iter().position(|page| page.own == *dict).map(|index| index + 1)
+}
+
 /// Resolves an indirect reference against the parsed object table.
 fn resolve_document<'a>(
     document: &'a data_binary_pdf::PdfDocument,
@@ -979,24 +1082,16 @@ fn resolve_document<'a>(
 /// pages, otherwise `None` is returned.
 fn bookmark_page(document: &data_binary_pdf::PdfDocument, item: &data_binary_pdf::Dict) -> Option<usize> {
     let destination = match item.get("Dest") {
-        Some(object) => object.clone(),
+        Some(object) => object,
         None => {
             let action = item.get("A").and_then(|object| resolve_document(document, object))?.as_dict()?;
             if action.get("S").and_then(data_binary_pdf::PdfObject::as_name) != Some("GoTo") {
                 return None;
             }
-            action.get("D")?.clone()
+            action.get("D")?
         }
     };
-    let page_object = match &destination {
-        data_binary_pdf::PdfObject::Array(values) => values.first()?,
-        other => other,
-    };
-    let resolved = resolve_document(document, page_object)?;
-    let data_binary_pdf::PdfObject::Dictionary(dict) = resolved else {
-        return None;
-    };
-    document.pages.iter().position(|page| page.own == *dict).map(|index| index + 1)
+    destination_page(document, destination)
 }
 
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
@@ -1077,7 +1172,8 @@ pub fn capabilities() -> serde_json::Value {
             "extractTextPages": "supported",
             "search": "partial",
             "extractImages": "supported",
-            "extractImagesPages": "supported"
+            "extractImagesPages": "supported",
+            "extractLinks": "supported"
         },
         "checks": {
             "metadata": "supported",

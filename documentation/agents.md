@@ -53,6 +53,7 @@ open-pdf stamp-page-numbers <file> --pages <list> [--start <number>] [--format <
 open-pdf extract-text <file> [--pages <list>] | --stdin
 open-pdf search <file> <query> [--limit <n>] [--pages <list>] [--ignore-case] [--whole-word] [--skip <n>]
 open-pdf extract-images <file> [--pages <list>] | --stdin -o <out-dir> [--name <stem>]
+open-pdf extract-links <file>
 ```
 
 `-o` is `--out` everywhere except `split` and `extract-images`, where it is
@@ -237,6 +238,7 @@ Report shapes:
 | `extract-text` | `{ pages, sourcePages?, selected?, markdown, losses: [{ code, page, message }] }` |
 | `search` | `{ path, query, matchCase, wholeWord, skip, limit, pages, sourcePages?, selected?, lines, truncated, hits, losses }` |
 | `extract-images` | `[{ page, index, name, width, height, filter, path, loss? }]` (`page` is the source page when `--pages` is used) |
+| `extract-links` | `{ path, pages, count, links: [{ page, rect, uri, destination }] }` |
 
 Nested values:
 

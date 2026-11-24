@@ -592,6 +592,14 @@ fn pdf_stamp_page_numbers(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Lists the link annotations one PDF file carries.
+#[function]
+fn pdf_extract_links(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let report = open_pdf_core::extract_links(std::path::Path::new(&path)).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 register_module![
     version,
     capabilities,
@@ -629,5 +637,6 @@ register_module![
     pdf_extract_text_bytes,
     pdf_extract_images_bytes,
     pdf_stamp,
-    pdf_stamp_page_numbers
+    pdf_stamp_page_numbers,
+    pdf_extract_links
 ];

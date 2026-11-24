@@ -67,6 +67,25 @@ export interface FormField {
     readonly required: boolean;
 }
 
+/** Result of `extractLinks()`. */
+export interface ExtractLinksReport {
+    readonly path: string;
+    /** Pages in the document. */
+    readonly pages: number;
+    /** Number of link annotations found. */
+    readonly count: number;
+    readonly links: readonly {
+        /** 1-based page carrying the annotation. */
+        readonly page: number;
+        /** Annotation rectangle `[left, bottom, right, top]`, or `null`. */
+        readonly rect: readonly number[] | null;
+        /** External target for URI actions, or `null`. */
+        readonly uri: string | null;
+        /** 1-based page of an internal GoTo target, or `null`. */
+        readonly destination: number | null;
+    }[];
+}
+
 /** Result of `inspect()`. */
 export interface PdfInspectReport {
     readonly label: string;
@@ -146,6 +165,7 @@ export interface PdfCapabilities {
         readonly search: SupportLevel;
         readonly extractImages: SupportLevel;
         readonly extractImagesPages: SupportLevel;
+        readonly extractLinks: SupportLevel;
     };
     readonly checks: {
         readonly metadata: SupportLevel;

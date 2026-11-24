@@ -8,7 +8,8 @@ use open_pdf_core::{
     Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, clear_metadata, create,
     delete_pages,
     duplicate_pages,
-    extract_images, extract_images_pages, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect, inspect_bytes,
+    extract_images, extract_images_pages, extract_links, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect,
+    inspect_bytes,
     insert_blank_pages, insert_pages,
     merge, merge_selected, metadata, move_pages, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages,
     set_bookmarks,
@@ -18,7 +19,7 @@ use open_pdf_core::{
     stamp_page_numbers,
     swap_pages,
 };
-use serde_json::json;
+use serde_json::{Value, json};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -383,6 +384,73 @@ fn split_bookmarks_prepends_the_lead_in_and_rejects_bad_outlines() {
         ]),
     );
     assert_invalid(split_bookmarks(&broken, &workspace.path("broken-split")), "session/argument-invalid");
+}
+
+#[test]
+fn extract_lists_uri_and_internal_link_annotations() {
+    let workspace = Workspace::new();
+    let path = workspace.write(
+        "links.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Annots [5 0 R 6 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Annots [7 0 R] >>",
+            "<< /Type /Annot /Subtype /Link /Rect [10 10 90 24] /Border [0 0 0] /A << /S /URI /URI (https://example.com/docs) >> >>",
+            "<< /Type /Annot /Subtype /Link /Rect [10 360 90 380] /Border [0 0 0] /Dest [4 0 R /Fit] >>",
+            "<< /Type /Annot /Subtype /Link /Rect [200 10 260 24] /Border [0 0 0] /A << /S /GoTo /D [3 0 R /Fit] >> >>",
+        ]),
+    );
+
+    let report = extract_links(&path).expect("extract links");
+    assert_eq!(report["path"], json!(path.display().to_string()));
+    assert_eq!(report["pages"], json!(2));
+    assert_eq!(report["count"], json!(3));
+    let links = report["links"].as_array().expect("links");
+    assert_eq!(links[0]["page"], json!(1));
+    assert_eq!(links[0]["rect"], json!([10.0, 10.0, 90.0, 24.0]));
+    assert_eq!(links[0]["uri"], json!("https://example.com/docs"));
+    assert_eq!(links[0]["destination"], Value::Null);
+    assert_eq!(links[1]["page"], json!(1));
+    assert_eq!(links[1]["uri"], Value::Null);
+    assert_eq!(links[1]["destination"], json!(2));
+    assert_eq!(links[2]["page"], json!(2));
+    assert_eq!(links[2]["uri"], Value::Null);
+    assert_eq!(links[2]["destination"], json!(1));
+}
+
+#[test]
+fn extract_links_skips_other_annotations_and_unresolvable_targets() {
+    let workspace = Workspace::new();
+    let plain = workspace.create("plain.pdf", None, &["One", "Two"]);
+    let report = extract_links(&plain).expect("extract links without annotations");
+    assert_eq!(report["pages"], json!(2));
+    assert_eq!(report["count"], json!(0));
+    assert_eq!(report["links"].as_array().expect("links").len(), 0);
+
+    let annotated = workspace.write(
+        "annotated.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Annots [4 0 R 5 0 R 6 0 R] >>",
+            "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents (note) >>",
+            "<< /Type /Annot /Subtype /Link /Rect [100 100 160 120] >>",
+            "<< /Type /Annot /Subtype /Link /Rect [200 100 260 120] /Dest (somewhere) >>",
+        ]),
+    );
+    let report = extract_links(&annotated).expect("extract mixed annotations");
+    assert_eq!(report["count"], json!(2));
+    let links = report["links"].as_array().expect("links");
+    assert_eq!(links[0]["page"], json!(1));
+    assert_eq!(links[0]["rect"], json!([100.0, 100.0, 160.0, 120.0]));
+    assert_eq!(links[0]["uri"], Value::Null);
+    assert_eq!(links[0]["destination"], Value::Null);
+    assert_eq!(links[1]["rect"], json!([200.0, 100.0, 260.0, 120.0]));
+    assert_eq!(links[1]["destination"], Value::Null);
+
+    let broken = workspace.write("broken.pdf", b"not a pdf");
+    assert_invalid(extract_links(&broken), "format/invalid");
 }
 
 #[test]

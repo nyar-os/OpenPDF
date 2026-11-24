@@ -31,7 +31,8 @@
             "stamp-page-numbers": "Stamp sequential page numbers onto selected pages",
             "extract-text": "Extract text from content streams, including compressed ones",
             "search": "Search extracted text line by line",
-            "extract-images": "Write embedded JPEG and PNG-encodable images to a directory"
+            "extract-images": "Write embedded JPEG and PNG-encodable images to a directory",
+            "extract-links": "List the link annotations a PDF carries"
         },
         "opt": {
             "print": "Print the viewer command without launching it",
