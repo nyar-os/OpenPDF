@@ -10,7 +10,7 @@ use open_pdf_core::{
     duplicate_pages,
     extract_images, extract_images_pages, extract_links, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect,
     inspect_bytes,
-    insert_blank_pages, insert_pages,
+    insert_blank_pages, insert_pages, interleave_pages,
     merge, merge_selected, metadata, move_pages, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages,
     set_bookmarks,
     set_metadata,
@@ -451,6 +451,46 @@ fn extract_links_skips_other_annotations_and_unresolvable_targets() {
 
     let broken = workspace.write("broken.pdf", b"not a pdf");
     assert_invalid(extract_links(&broken), "format/invalid");
+}
+
+#[test]
+fn interleave_pages_alternates_the_two_documents_then_appends_the_remainder() {
+    let workspace = Workspace::new();
+    let first = workspace.create("first.pdf", None, &["A1", "A2", "A3"]);
+    let second = workspace.create("second.pdf", None, &["B1", "B2"]);
+    let out = workspace.path("mixed.pdf");
+
+    let report = interleave_pages(&first, &second, &out, false).expect("interleave pages");
+    assert_eq!(report["path"], json!(out.display().to_string()));
+    assert_eq!(report["pages"], json!(5));
+    assert_eq!(report["first"], json!(first.display().to_string()));
+    assert_eq!(report["firstPages"], json!(3));
+    assert_eq!(report["second"], json!(second.display().to_string()));
+    assert_eq!(report["secondPages"], json!(2));
+
+    let extracted = extract_text(&out).expect("extract interleaved");
+    let mut position = 0usize;
+    for token in ["A1", "B1", "A2", "B2", "A3"] {
+        let found = extracted.markdown.find(token).unwrap_or_else(|| panic!("missing `{token}`: {:?}", extracted.markdown));
+        assert!(found >= position, "wrong order: {:?}", extracted.markdown);
+        position = found;
+    }
+}
+
+#[test]
+fn interleave_pages_guards_overwrite_and_rejects_missing_inputs() {
+    let workspace = Workspace::new();
+    let first = workspace.create("first.pdf", None, &["A1"]);
+    let second = workspace.create("second.pdf", None, &["B1"]);
+    let out = workspace.path("mixed.pdf");
+
+    interleave_pages(&first, &second, &out, false).expect("interleave once");
+    assert_eq!(inspect(&out).expect("inspect interleaved").pages, 2);
+    assert_invalid(interleave_pages(&first, &second, &out, false), "io/exists");
+    interleave_pages(&first, &second, &out, true).expect("interleave again");
+
+    let missing = workspace.path("missing.pdf");
+    assert_invalid(interleave_pages(&first, &missing, &out, true), "io/read");
 }
 
 #[test]

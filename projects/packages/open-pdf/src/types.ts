@@ -150,6 +150,7 @@ export interface PdfCapabilities {
         readonly insertPages: SupportLevel;
         readonly insertBlankPages: SupportLevel;
         readonly replacePages: SupportLevel;
+        readonly interleavePages: SupportLevel;
         readonly reversePages: SupportLevel;
         readonly rotatePages: SupportLevel;
         readonly setPageBoxes: SupportLevel;
@@ -298,6 +299,16 @@ export interface InsertBlankPagesReport {
     readonly insertedPages: number;
     /** One-based target page the blanks follow; `0` means first. */
     readonly after: number;
+}
+
+/** Result of `interleavePages()`. */
+export interface InterleavePagesReport {
+    readonly path: string;
+    readonly pages: number;
+    readonly first: string;
+    readonly firstPages: number;
+    readonly second: string;
+    readonly secondPages: number;
 }
 
 /** Result of `replacePages()`. */

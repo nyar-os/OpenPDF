@@ -1094,6 +1094,58 @@ fn bookmark_page(document: &data_binary_pdf::PdfDocument, item: &data_binary_pdf
     destination_page(document, destination)
 }
 
+/// Interleaves the pages of two PDFs into one document.
+///
+/// The output starts with the first page of `first`, then the first page of
+/// `second`, and so on; when one document runs out, the remaining pages of
+/// the longer one follow in order. Both documents must carry at least one
+/// page, and the output is replaced only when `overwrite` is true.
+pub fn interleave_pages(first: &Path, second: &Path, out: &Path, overwrite: bool) -> Result<Value, ServiceError> {
+    if out.exists() && !overwrite {
+        return Err(ServiceError::new(
+            "io/exists",
+            format!("{} already exists; pass overwrite to replace it", out.display()),
+        ));
+    }
+    let first_pages = document_pdf::inspect(first)?.pages;
+    let second_pages = document_pdf::inspect(second)?.pages;
+    if first_pages == 0 || second_pages == 0 {
+        return Err(invalid_pages("both documents must carry at least one page"));
+    }
+    // `merge` cannot interleave across documents, so split both files into
+    // one-page parts and merge the alternating sequence back in order.
+    let first_scratch = temporary_path().with_extension("int-a");
+    let second_scratch = temporary_path().with_extension("int-b");
+    let outcome = (|| {
+        let a = document_pdf::split_every(first, 1, &first_scratch)?;
+        let b = document_pdf::split_every(second, 1, &second_scratch)?;
+        if a.documents.len() != first_pages || b.documents.len() != second_pages {
+            return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
+        }
+        let mut inputs = Vec::with_capacity(a.documents.len() + b.documents.len());
+        for index in 0..std::cmp::max(a.documents.len(), b.documents.len()) {
+            if let Some(part) = a.documents.get(index) {
+                inputs.push(PathBuf::from(&part.path));
+            }
+            if let Some(part) = b.documents.get(index) {
+                inputs.push(PathBuf::from(&part.path));
+            }
+        }
+        document_pdf::merge(&inputs, out, true, None)
+    })();
+    let _ = fs::remove_dir_all(&first_scratch);
+    let _ = fs::remove_dir_all(&second_scratch);
+    let merged = outcome?;
+    Ok(json!({
+        "path": merged.path,
+        "pages": merged.pages,
+        "first": first.display().to_string(),
+        "firstPages": first_pages,
+        "second": second.display().to_string(),
+        "secondPages": second_pages,
+    }))
+}
+
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
     ServiceError::new("session/argument-invalid", message)
 }
@@ -1158,6 +1210,7 @@ pub fn capabilities() -> serde_json::Value {
             "insertPages": "supported",
             "insertBlankPages": "supported",
             "replacePages": "supported",
+            "interleavePages": "supported",
             "reversePages": "supported",
             "rotatePages": "supported",
             "setPageBoxes": "supported",

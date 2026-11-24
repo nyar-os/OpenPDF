@@ -27,6 +27,7 @@ import type {
     FormValue,
     InsertBlankPagesReport,
     InsertPagesReport,
+    InterleavePagesReport,
     KeepPagesReport,
     MergeOptions,
     MergeReport,
@@ -189,6 +190,16 @@ export class OpenPDF {
         selected: string | null = null,
     ): Promise<ReplacePagesReport> {
         return service.replacePages(path, pages, insert, out, overwrite, selected);
+    }
+
+    /** Interleaves the pages of two PDFs into one new PDF. */
+    async interleavePages(
+        first: string,
+        second: string,
+        out: string,
+        overwrite = this.defaultOverwrite,
+    ): Promise<InterleavePagesReport> {
+        return service.interleavePages(first, second, out, overwrite);
     }
 
     /** Reverses the page order into a new PDF. */
@@ -480,6 +491,11 @@ export class OpenPDF {
         selected: string | null = null,
     ): ReplacePagesReport {
         return service.replacePages(path, pages, insert, out, overwrite, selected);
+    }
+
+    /** Interleaves the pages of two PDFs into one new PDF. */
+    static interleavePages(first: string, second: string, out: string, overwrite = false): InterleavePagesReport {
+        return service.interleavePages(first, second, out, overwrite);
     }
 
     /** Reverses the page order into a new PDF. */

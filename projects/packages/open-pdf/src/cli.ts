@@ -661,6 +661,35 @@ cli
     });
 
 cli
+    .command('interleave-pages', 'cli.cmd.interleave-pages')
+    .option('--second <file>', 'cli.opt.interleave-second')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const second = text(options, 'second');
+        const out = text(options, 'out');
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (second === undefined || second.length === 0) {
+            ctx.fail('open-pdf.cli.inputs-required', { message: '`--second <file>` is required' });
+            return 2;
+        }
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const report = await pdf.interleavePages(file, second, out, flag(options, 'overwrite'));
+        ctx.emitResult(
+            report,
+            `interleaved ${report.path} pages=${report.pages} first=${report.firstPages} second=${report.secondPages}`,
+        );
+        return 0;
+    });
+
+cli
     .command('reverse-pages', 'cli.cmd.reverse-pages')
     .option('--pages <list>', 'cli.opt.pages')
     .option('-o, --out <file>', 'cli.opt.out')

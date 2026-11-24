@@ -27,6 +27,7 @@ import type {
     FormValue,
     InsertBlankPagesReport,
     InsertPagesReport,
+    InterleavePagesReport,
     KeepPagesReport,
     MergeOptions,
     MergeReport,
@@ -261,6 +262,17 @@ export function replacePages(
     return decode<ReplacePagesReport>(() =>
         binding('replacePages').pdf_replace_pages(path, pages, insert, out, overwrite, selected),
     );
+}
+
+/**
+ * Interleaves the pages of two PDFs into one new PDF.
+ *
+ * The output starts with the first page of `first`, then the first page of
+ * `second`, and so on; when one document runs out, the remaining pages of the
+ * longer one follow in order.
+ */
+export function interleavePages(first: string, second: string, out: string, overwrite = false): InterleavePagesReport {
+    return decode<InterleavePagesReport>(() => binding('interleavePages').pdf_interleave_pages(first, second, out, overwrite));
 }
 
 /** Reverses the page order of `path` into a new PDF. */

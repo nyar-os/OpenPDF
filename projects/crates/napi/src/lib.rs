@@ -600,6 +600,23 @@ fn pdf_extract_links(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Interleaves the pages of two PDF files into one new PDF.
+#[function]
+fn pdf_interleave_pages(ctx: CallContext) -> Result<JsValue> {
+    let first = text(&ctx, 0)?;
+    let second = text(&ctx, 1)?;
+    let out = text(&ctx, 2)?;
+    let overwrite = ctx.args().get(3).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::interleave_pages(
+        std::path::Path::new(&first),
+        std::path::Path::new(&second),
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 register_module![
     version,
     capabilities,
@@ -638,5 +655,6 @@ register_module![
     pdf_extract_images_bytes,
     pdf_stamp,
     pdf_stamp_page_numbers,
-    pdf_extract_links
+    pdf_extract_links,
+    pdf_interleave_pages
 ];

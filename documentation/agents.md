@@ -37,6 +37,7 @@ open-pdf duplicate-pages <file> --pages <list> [--times <count>] -o <out> [--ove
 open-pdf insert-pages <file> --insert <file> (--after <page> | --before <page>) [--pages <ranges>] -o <out> [--overwrite]
 open-pdf insert-blank-pages <file> (--after <page> | --before <page>) [--count <count>] [--size <size>] -o <out> [--overwrite]
 open-pdf replace-pages <file> --pages <list> --insert <file> [--source-pages <ranges>] -o <out> [--overwrite]
+open-pdf interleave-pages <file> --second <file> -o <out> [--overwrite]
 open-pdf reverse-pages <file> [--pages <list>] -o <out> [--overwrite]
 open-pdf swap-pages <file> --pages <list> --with <list> -o <out> [--overwrite]
 open-pdf move-pages <file> --pages <list> (--after <page> | --before <page>) -o <out> [--overwrite]
@@ -138,6 +139,9 @@ contains the input PDFs. Failure codes such as `session/argument-invalid` or
   `--size` accepts the same names as `create --page-size`, and without it the
   blanks take the geometry of the source's first page.
   page, so the page count changes by `replacementPages - removed`.
+- `--second` on `interleave-pages` is the PDF whose first page follows the
+  first page of the input, and so on; when one document runs out, the
+  remaining pages of the longer one are appended in order.
 - `--order` and `--remove` are comma-separated page numbers. When both are
   given, removal runs first and `--order` must list every surviving page once.
 - `--pages` and `--with` on `swap-pages` must select the same number of pages
@@ -222,6 +226,7 @@ Report shapes:
 | `insert-pages` | `{ path, pages, sourcePages, insertedPages, sourceInsertPages, selectedPages, insert, after }` |
 | `insert-blank-pages` | `{ path, pages, sourcePages, insertedPages, after }` |
 | `replace-pages` | `{ path, pages, sourcePages, replaced, replacementPages, sourceInsertPages, selectedPages, insert }` |
+| `interleave-pages` | `{ path, pages, first, firstPages, second, secondPages }` |
 | `reverse-pages` | `{ path, pages, sourcePages, reversed }` |
 | `swap-pages` | `{ path, pages, sourcePages, swapped, with }` |
 | `move-pages` | `{ path, pages, sourcePages, moved, after }` |
@@ -312,7 +317,7 @@ transformations never read from stdin, and `split` always reads a path.
 ## Overwrite rules
 
 `--overwrite` exists only on `merge`, `delete-pages`, `duplicate-pages`,
-`insert-pages`, `insert-blank-pages`, `replace-pages`, `reverse-pages`,
+`insert-pages`, `insert-blank-pages`, `replace-pages`, `interleave-pages`, `reverse-pages`,
 `swap-pages`, `stamp-page-numbers`, `extract-pages`, `rotate`,
 `set-page-boxes` and `create`. The default is off.
 When a guarded output already exists and overwrite is not allowed, the operation
@@ -322,7 +327,7 @@ fails with `io/exists`; nothing is replaced in place.
 `bookmarks`, `fill-form` and `stamp` expose
 no overwrite flag. In the SDK, `new OpenPDF({ overwrite: true })` supplies the
 default for `merge`, `deletePages`, `duplicatePages`, `insertPages`,
-`insertBlankPages`, `replacePages`, `reversePages`, `swapPages`,
+`insertBlankPages`, `replacePages`, `interleavePages`, `reversePages`, `swapPages`,
 `stampPageNumbers`, `keepPages`, `rotatePages`,
 `setPageBoxes` and `create`; the remaining methods do not accept an overwrite
 argument.
