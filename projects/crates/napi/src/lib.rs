@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
 fn argument(ctx: &CallContext, index: usize) -> Result<JsValue> {
-    ctx.args().get(index).copied().ok_or_else(|| Error::new("session/argument-invalid: a required argument is missing"))
+    ctx.args().get(index).copied().ok_or_else(|| Error::new("a required argument is missing").code("session/argument-invalid"))
 }
 
 fn text(ctx: &CallContext, index: usize) -> Result<String> {
@@ -42,7 +42,7 @@ fn optional_text(ctx: &CallContext, index: usize) -> Result<Option<String>> {
 /// Reads a `Buffer` or `Uint8Array` argument as raw bytes.
 fn bytes(ctx: &CallContext, index: usize) -> Result<Vec<u8>> {
     let value = argument(ctx, index)?;
-    let invalid = || Error::new("session/argument-invalid: expected a Buffer or Uint8Array of PDF bytes");
+    let invalid = || Error::new("expected a Buffer or Uint8Array of PDF bytes").code("session/argument-invalid");
     let length = value.get_named("length").map_err(|_| invalid())?.as_i64().map_err(|_| invalid())?;
     let length = usize::try_from(length).map_err(|_| invalid())?;
     let mut output = Vec::with_capacity(length);
@@ -55,12 +55,16 @@ fn bytes(ctx: &CallContext, index: usize) -> Result<Vec<u8>> {
 }
 
 fn respond(ctx: &CallContext, value: &impl serde::Serialize) -> Result<JsValue> {
-    let text = serde_json::to_string(value).map_err(|error| Error::new(format!("capability/not-implemented: {error}")))?;
+    let text = serde_json::to_string(value).map_err(|error| {
+        Error::new(error.to_string()).code("capability/not-implemented")
+    })?;
     ctx.env().string(&text)
 }
 
 fn failure(error: open_pdf_core::ServiceError) -> Error {
-    Error::new(format!("{}: {}", error.code(), error.message()))
+    // Deliver the stable `code` as a verifiable field instead of concatenating
+    // `code: message`, so the SDK classifies on `code` and never parses prose.
+    Error::new(error.message().to_owned()).code(error.code().to_owned())
 }
 
 /// Library version of the native binding.
@@ -97,7 +101,7 @@ fn pdf_move_pages(ctx: CallContext) -> Result<JsValue> {
     let pages = text(&ctx, 1)?;
     let after = argument(&ctx, 2)?.as_i64()?;
     let after =
-        u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
+        u32::try_from(after).map_err(|_| Error::new("`after` must be a non-negative integer").code("session/argument-invalid"))?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let report =
@@ -122,13 +126,13 @@ fn pdf_merge(ctx: CallContext) -> Result<JsValue> {
     let overwrite = ctx.args().get(2).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let title = optional_text(&ctx, 3)?;
     let inputs: Vec<String> =
-        serde_json::from_str(&inputs_json).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&inputs_json).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let inputs: Vec<PathBuf> = inputs.into_iter().map(PathBuf::from).collect();
     let selections_json = optional_text(&ctx, 4)?;
     let selections: Option<Vec<String>> = match selections_json.as_deref() {
         None | Some("") => None,
         Some(json) => Some(
-            serde_json::from_str(json).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?,
+            serde_json::from_str(json).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?,
         ),
     };
     let report = open_pdf_core::merge_selected(
@@ -157,7 +161,7 @@ fn pdf_split(ctx: CallContext) -> Result<JsValue> {
 fn pdf_split_every(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
     let every = argument(&ctx, 1)?.as_i64()?;
-    let every = usize::try_from(every).map_err(|_| Error::new("session/argument-invalid: --every must be positive"))?;
+    let every = usize::try_from(every).map_err(|_| Error::new("--every must be positive").code("session/argument-invalid"))?;
     let out_dir = text(&ctx, 2)?;
     let report =
         open_pdf_core::split_every(std::path::Path::new(&path), every, std::path::Path::new(&out_dir)).map_err(failure)?;
@@ -169,7 +173,7 @@ fn pdf_split_every(ctx: CallContext) -> Result<JsValue> {
 fn pdf_split_parts(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
     let parts = argument(&ctx, 1)?.as_i64()?;
-    let parts = usize::try_from(parts).map_err(|_| Error::new("session/argument-invalid: `parts` must be positive"))?;
+    let parts = usize::try_from(parts).map_err(|_| Error::new("`parts` must be positive").code("session/argument-invalid"))?;
     let out_dir = text(&ctx, 2)?;
     let report =
         open_pdf_core::split_parts(std::path::Path::new(&path), parts, std::path::Path::new(&out_dir)).map_err(failure)?;
@@ -193,7 +197,7 @@ fn pdf_arrange(ctx: CallContext) -> Result<JsValue> {
     let out = text(&ctx, 1)?;
     let raw = text(&ctx, 2)?;
     let ops: open_pdf_core::DocumentArrange =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let report = open_pdf_core::arrange(std::path::Path::new(&path), std::path::Path::new(&out), &ops).map_err(failure)?;
     respond(&ctx, &report)
 }
@@ -218,7 +222,7 @@ fn pdf_duplicate_pages(ctx: CallContext) -> Result<JsValue> {
     let pages = text(&ctx, 1)?;
     let times = argument(&ctx, 2)?.as_i64()?;
     let times =
-        u32::try_from(times).map_err(|_| Error::new("session/argument-invalid: `times` must be an integer"))?;
+        u32::try_from(times).map_err(|_| Error::new("`times` must be an integer").code("session/argument-invalid"))?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let report =
@@ -234,7 +238,7 @@ fn pdf_insert_pages(ctx: CallContext) -> Result<JsValue> {
     let insert = text(&ctx, 1)?;
     let after = argument(&ctx, 2)?.as_i64()?;
     let after =
-        u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
+        u32::try_from(after).map_err(|_| Error::new("`after` must be a non-negative integer").code("session/argument-invalid"))?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let selected = optional_text(&ctx, 5)?;
@@ -256,10 +260,10 @@ fn pdf_insert_blank_pages(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
     let after = argument(&ctx, 1)?.as_i64()?;
     let after =
-        u32::try_from(after).map_err(|_| Error::new("session/argument-invalid: `after` must be a non-negative integer"))?;
+        u32::try_from(after).map_err(|_| Error::new("`after` must be a non-negative integer").code("session/argument-invalid"))?;
     let count = argument(&ctx, 2)?.as_i64()?;
     let count =
-        u32::try_from(count).map_err(|_| Error::new("session/argument-invalid: `count` must be a non-negative integer"))?;
+        u32::try_from(count).map_err(|_| Error::new("`count` must be a non-negative integer").code("session/argument-invalid"))?;
     let size = optional_text(&ctx, 3)?;
     let out = text(&ctx, 4)?;
     let overwrite = ctx.args().get(5).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
@@ -339,7 +343,7 @@ fn pdf_rotate_pages(ctx: CallContext) -> Result<JsValue> {
     let pages = text(&ctx, 1)?;
     let degrees = argument(&ctx, 2)?.as_i64()?;
     let degrees =
-        i32::try_from(degrees).map_err(|_| Error::new("session/argument-invalid: degrees must be 90, 180 or 270"))?;
+        i32::try_from(degrees).map_err(|_| Error::new("degrees must be 90, 180 or 270").code("session/argument-invalid"))?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let report = open_pdf_core::rotate_pages(std::path::Path::new(&path), &pages, degrees, std::path::Path::new(&out), overwrite)
@@ -354,7 +358,7 @@ fn pdf_set_page_boxes(ctx: CallContext) -> Result<JsValue> {
     let pages = text(&ctx, 1)?;
     let raw = text(&ctx, 2)?;
     let crop: [f64; 4] =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let out = text(&ctx, 3)?;
     let overwrite = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let report =
@@ -370,7 +374,7 @@ fn pdf_set_metadata(ctx: CallContext) -> Result<JsValue> {
     let out = text(&ctx, 1)?;
     let raw = text(&ctx, 2)?;
     let patch: open_pdf_core::MetadataPatch =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let report =
         open_pdf_core::set_metadata(std::path::Path::new(&path), std::path::Path::new(&out), &patch).map_err(failure)?;
     respond(&ctx, &report)
@@ -398,7 +402,7 @@ fn pdf_set_bookmarks(ctx: CallContext) -> Result<JsValue> {
     let out = text(&ctx, 1)?;
     let raw = text(&ctx, 2)?;
     let request: BookmarkRequest =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let report =
         open_pdf_core::set_bookmarks(std::path::Path::new(&path), std::path::Path::new(&out), &request.bookmarks)
             .map_err(failure)?;
@@ -418,7 +422,7 @@ fn pdf_fill_form(ctx: CallContext) -> Result<JsValue> {
     let out = text(&ctx, 1)?;
     let raw = text(&ctx, 2)?;
     let request: FillFormRequest =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let report = open_pdf_core::fill_form(std::path::Path::new(&path), std::path::Path::new(&out), &request.values)
         .map_err(failure)?;
     respond(&ctx, &report)
@@ -429,7 +433,7 @@ fn pdf_fill_form(ctx: CallContext) -> Result<JsValue> {
 fn pdf_create(ctx: CallContext) -> Result<JsValue> {
     let raw = text(&ctx, 0)?;
     let request: open_pdf_core::CreateRequest =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     respond(&ctx, &open_pdf_core::create(&request).map_err(failure)?)
 }
 
@@ -457,7 +461,7 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
         Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
             let value = u32::try_from(value)
-                .map_err(|_| Error::new("session/argument-invalid: limit must be a positive integer"))?;
+                .map_err(|_| Error::new("limit must be a positive integer").code("session/argument-invalid"))?;
             Some(value)
         }
         _ => None,
@@ -467,7 +471,7 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
     let skip = match ctx.args().get(5) {
         Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
-            u32::try_from(value).map_err(|_| Error::new("session/argument-invalid: skip must be a non-negative integer"))?
+            u32::try_from(value).map_err(|_| Error::new("skip must be a non-negative integer").code("session/argument-invalid"))?
         }
         _ => 0,
     };
@@ -488,7 +492,7 @@ fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
         Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
             let value = u32::try_from(value)
-                .map_err(|_| Error::new("session/argument-invalid: limit must be a positive integer"))?;
+                .map_err(|_| Error::new("limit must be a positive integer").code("session/argument-invalid"))?;
             Some(value)
         }
         _ => None,
@@ -498,7 +502,7 @@ fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
     let skip = match ctx.args().get(6) {
         Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
-            u32::try_from(value).map_err(|_| Error::new("session/argument-invalid: skip must be a non-negative integer"))?
+            u32::try_from(value).map_err(|_| Error::new("skip must be a non-negative integer").code("session/argument-invalid"))?
         }
         _ => 0,
     };
@@ -571,7 +575,7 @@ fn pdf_stamp(ctx: CallContext) -> Result<JsValue> {
     let out = text(&ctx, 1)?;
     let raw = text(&ctx, 2)?;
     let request: open_pdf_core::StampRequest =
-        serde_json::from_str(&raw).map_err(|error| Error::new(format!("session/argument-invalid: {error}")))?;
+        serde_json::from_str(&raw).map_err(|error| Error::new(error.to_string()).code("session/argument-invalid"))?;
     let report =
         open_pdf_core::stamp(std::path::Path::new(&path), std::path::Path::new(&out), &request).map_err(failure)?;
     respond(&ctx, &report)
@@ -584,7 +588,7 @@ fn pdf_stamp_page_numbers(ctx: CallContext) -> Result<JsValue> {
     let pages = text(&ctx, 1)?;
     let start = argument(&ctx, 2)?.as_i64()?;
     let start =
-        u32::try_from(start).map_err(|_| Error::new("session/argument-invalid: `start` must be a non-negative integer"))?;
+        u32::try_from(start).map_err(|_| Error::new("`start` must be a non-negative integer").code("session/argument-invalid"))?;
     let format = optional_text(&ctx, 3)?;
     let position = optional_text(&ctx, 4)?;
     let out = text(&ctx, 5)?;
