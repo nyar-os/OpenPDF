@@ -1,0 +1,39 @@
+{
+    "session/argument-invalid": "{message}",
+    "format/invalid": "{message}",
+    "format/unsupported": "{message}",
+    "io/read": "{message}",
+    "io/write": "{message}",
+    "io/exists": "{message}",
+    "capability/not-implemented": "{message}",
+    "binding/failure": "{message}",
+    "open-pdf": {
+        "cli": {
+            "file-required": "{message}",
+            "file-not-found": "{message}",
+            "open-failed": "{message}",
+            "input-required": "{message}",
+            "stdin-empty": "{message}",
+            "depth-invalid": "{message}",
+            "inputs-required": "{message}",
+            "out-required": "{message}",
+            "split-args": "{message}",
+            "arrange-args": "{message}",
+            "pages-args": "{message}",
+            "times-args": "{message}",
+            "insert-args": "{message}",
+            "after-args": "{message}",
+            "count-args": "{message}",
+            "degrees-args": "{message}",
+            "bookmark-args": "{message}",
+            "set-args": "{message}",
+            "page-required": "{message}",
+            "create-style": "{message}",
+            "stamp-args": "{message}",
+            "search-args": "{message}",
+            "search-limit": "{message}",
+            "pages-need-file": "{message}",
+            "image-dir-required": "{message}"
+        }
+    }
+}

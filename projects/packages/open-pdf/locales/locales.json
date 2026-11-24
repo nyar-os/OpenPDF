@@ -1,7 +1,8 @@
 {
-    "defaultLocale": "en-US",
     "locales": [
-        { "id": "en-US", "label": "English" }
+        { "id": "en-US" },
+        { "id": "zh-CN", "fallbacks": ["en-US"] }
     ],
-    "fallback": {}
+    "fallback": { "zh-CN": ["en-US"] },
+    "defaultLocale": "en-US"
 }
