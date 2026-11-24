@@ -168,6 +168,58 @@ test('reversePages flips the page order', { skip: withoutAddon }, async () => {
     }
 });
 
+test('page operations honour the selected slot and reject illegal selections', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        const insert = path.join(dir, 'insert.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two', 'Three', 'Four'], overwrite: true });
+        await OpenPDF.create({ out: insert, pages: ['Alpha', 'Beta'], overwrite: true });
+
+        // Omitting the selection (the SDK default `null`) reverses every page.
+        const reversedAll = path.join(dir, 'reverse-all.pdf');
+        const all = OpenPDF.reversePages(source, reversedAll);
+        assert.deepEqual(all.reversed, [1, 2, 3, 4]);
+        const allText = OpenPDF.extractText(reversedAll).markdown;
+        assert.ok(allText.indexOf('Four') < allText.indexOf('One'), allText);
+
+        // An explicit selection reverses only those pages; the rest keep their position.
+        const reversedSome = path.join(dir, 'reverse-some.pdf');
+        const some = OpenPDF.reversePages(source, reversedSome, false, '1,3');
+        assert.deepEqual(some.reversed, [1, 3]);
+        const someText = OpenPDF.extractText(reversedSome).markdown;
+        assert.ok(
+            someText.indexOf('Three') < someText.indexOf('Two') &&
+            someText.indexOf('Two') < someText.indexOf('One') &&
+            someText.indexOf('One') < someText.indexOf('Four'),
+            someText,
+        );
+
+        // Duplicate, out-of-range and reversed selections are illegal arguments, not format errors.
+        for (const bad of ['2,2', '9', '3-1']) {
+            assert.throws(
+                () => OpenPDF.reversePages(source, path.join(dir, 'bad.pdf'), false, bad),
+                (error: unknown) => error instanceof OpenPdfError && error.code === 'session/argument-invalid',
+            );
+        }
+
+        // replacePages uses the insert pages in the explicit selection order.
+        const replaced = path.join(dir, 'replace-selected.pdf');
+        const report = OpenPDF.replacePages(source, '2', insert, replaced, false, '2,1');
+        assert.deepEqual(report.selectedPages, [2, 1]);
+        assert.equal(report.pages, 5);
+        const replacedText = OpenPDF.extractText(replaced).markdown;
+        assert.ok(
+            replacedText.indexOf('One') < replacedText.indexOf('Beta') &&
+            replacedText.indexOf('Beta') < replacedText.indexOf('Alpha') &&
+            replacedText.indexOf('Alpha') < replacedText.indexOf('Three'),
+            replacedText,
+        );
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
 test('metadata reads the information dictionary', { skip: withoutAddon }, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
     try {

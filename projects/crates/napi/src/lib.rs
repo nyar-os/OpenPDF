@@ -19,9 +19,19 @@ fn text(ctx: &CallContext, index: usize) -> Result<String> {
     argument(ctx, index)?.as_string()
 }
 
+/// 可选槽位是否缺省：JS `undefined` 或 `null` 都视为未提供。
+///
+/// SDK 与 CLI 在省略可选参数时传 `null`，完全省略实参时 Node-API 给出 `undefined`；
+/// 两者都必须当作缺省，否则 `null` 会落到 `as_string`/`as_i64` 触发 `napi status 3`，
+/// 并被上层误判为文件格式错误。
+fn is_absent(value: JsValue) -> Result<bool> {
+    let kind = value.type_of()?;
+    Ok(kind == wae::sys::napi_undefined || kind == wae::sys::napi_null)
+}
+
 fn optional_text(ctx: &CallContext, index: usize) -> Result<Option<String>> {
     match ctx.args().get(index) {
-        Some(value) if !value.is_undefined()? => {
+        Some(value) if !is_absent(*value)? => {
             let text = value.as_string()?;
             if text.is_empty() { Ok(None) } else { Ok(Some(text)) }
         }
@@ -444,7 +454,7 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
     let query = text(&ctx, 1)?;
     let limit = match ctx.args().get(2) {
-        Some(value) if !value.is_undefined()? => {
+        Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
             let value = u32::try_from(value)
                 .map_err(|_| Error::new("session/argument-invalid: limit must be a positive integer"))?;
@@ -455,7 +465,7 @@ fn pdf_search(ctx: CallContext) -> Result<JsValue> {
     let match_case = ctx.args().get(3).map(|value| value.as_bool()).transpose()?.unwrap_or(true);
     let whole_word = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let skip = match ctx.args().get(5) {
-        Some(value) if !value.is_undefined()? => {
+        Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
             u32::try_from(value).map_err(|_| Error::new("session/argument-invalid: skip must be a non-negative integer"))?
         }
@@ -475,7 +485,7 @@ fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
     let query = text(&ctx, 1)?;
     let ranges = text(&ctx, 2)?;
     let limit = match ctx.args().get(3) {
-        Some(value) if !value.is_undefined()? => {
+        Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
             let value = u32::try_from(value)
                 .map_err(|_| Error::new("session/argument-invalid: limit must be a positive integer"))?;
@@ -486,7 +496,7 @@ fn pdf_search_pages(ctx: CallContext) -> Result<JsValue> {
     let match_case = ctx.args().get(4).map(|value| value.as_bool()).transpose()?.unwrap_or(true);
     let whole_word = ctx.args().get(5).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
     let skip = match ctx.args().get(6) {
-        Some(value) if !value.is_undefined()? => {
+        Some(value) if !is_absent(*value)? => {
             let value = value.as_i64()?;
             u32::try_from(value).map_err(|_| Error::new("session/argument-invalid: skip must be a non-negative integer"))?
         }
