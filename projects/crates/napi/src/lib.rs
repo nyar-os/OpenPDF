@@ -61,10 +61,15 @@ fn respond(ctx: &CallContext, value: &impl serde::Serialize) -> Result<JsValue> 
     ctx.env().string(&text)
 }
 
-fn failure(error: open_pdf_core::ServiceError) -> Error {
+fn failure<E: Into<open_pdf_core::ServiceError>>(error: E) -> Error {
     // Deliver the stable `code` as a verifiable field instead of concatenating
     // `code: message`, so the SDK classifies on `code` and never parses prose.
-    Error::new(error.message().to_owned()).code(error.code().to_owned())
+    let error = error.into();
+    let mut failure = Error::new(error.message().to_owned()).code(error.code().to_owned());
+    if !error.params().is_null() {
+        failure = failure.detail(serde_json::json!({ "params": error.params() }));
+    }
+    failure
 }
 
 /// Library version of the native binding.
