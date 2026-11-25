@@ -37,12 +37,50 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Build the native binding
-        run: cargo build -p open-pdf-napi
+        run: cargo build -p open-pdf-napi --message-format=json-render-diagnostics > cargo-build.json
       - name: Stage the addon under the extension Node loads
-        run: cp target/debug/libopen_pdf_napi.so target/debug/open_pdf_napi.node
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            let artifact = null;
+            for (const line of fs.readFileSync("cargo-build.json", "utf8").split("\n")) {
+              let message;
+              try { message = JSON.parse(line); } catch { continue; }
+              if (message.reason === "compiler-artifact"
+                  && message.target?.crate_types?.includes("cdylib")
+                  && message.filenames?.length) {
+                artifact = message.filenames.find((name) => name.endsWith(".so")) ?? message.filenames[0];
+              }
+            }
+            if (!artifact) {
+              console.error("no cdylib artifact found in cargo build messages");
+              process.exit(1);
+            }
+            fs.copyFileSync(artifact, "target/debug/open_pdf_napi.node");
+            console.log("staged cdylib:", artifact);
+          '
+      - name: Self-check the staged addon
+        env:
+          OPEN_PDF_NATIVE: ${{ github.workspace }}/target/debug/open_pdf_napi.node
+        run: |
+          node -e '
+            const binding = require(process.env.OPEN_PDF_NATIVE);
+            const version = binding.version();
+            if (typeof version !== "string" || version.length === 0) {
+              console.error("addon self-check failed: version() returned", JSON.stringify(version));
+              process.exit(1);
+            }
+            console.log("addon self-check ok: version", version);
+          '
       - name: Compile the package sources
         run: pnpm --filter @wae/open-pdf run build:test
       - name: Run the report workflow example against the real engine
-        run: pnpm --filter @wae/open-pdf run example
+        run: |
+          node projects/packages/open-pdf/dist-test/examples/report-workflow.js | tee report-workflow.log
+          grep -F "report workflow ok" report-workflow.log
+        env:
+          OPEN_PDF_NATIVE: ${{ github.workspace }}/target/debug/open_pdf_napi.node
+      - name: Run the SDK tests against the real engine
+        run: pnpm --filter @wae/open-pdf test
         env:
           OPEN_PDF_NATIVE: ${{ github.workspace }}/target/debug/open_pdf_napi.node
