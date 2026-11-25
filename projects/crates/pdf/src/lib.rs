@@ -10,7 +10,7 @@
 pub use document_pdf::{
     ArrangeReport, Bookmark, BookmarkReport, CreateReport, CreateRequest, DeletePagesReport, DocumentArrange, ExtractLoss,
     ExtractReport, ExtractedImage, FormFillReport, FormValue, InspectReport, MergeReport, MetadataPatch, PdfBookmark, PdfFormField,
-    PdfMetadata, PdfPageSize, RotatePagesReport, ServiceError, SetMetadataReport, SetPageBoxesReport, SplitPart, SplitReport,
+    PdfMetadata, PdfPageSize, RotatePagesReport, SetMetadataReport, SetPageBoxesReport, SplitPart, SplitReport,
     StampReport, StampRequest, arrange, create, delete_pages, extract_images, extract_images_bytes, extract_text,
     extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks, set_metadata, set_page_boxes, split,
     split_every, stamp,
@@ -23,6 +23,63 @@ use std::{
 };
 
 use serde_json::{Value, json};
+
+/// A failure reported by the product surface.
+///
+/// The code is part of the public contract and stays stable across message
+/// changes, so callers compare codes instead of parsing text. `params` carries
+/// the machine-readable values behind the message (for example the blocked
+/// `path` of an `io/exists` failure), so the SDK can render localized copy
+/// without ever reading prose.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServiceError {
+    code: String,
+    message: String,
+    params: Value,
+}
+
+impl ServiceError {
+    /// Builds an error from a stable code and a human-readable message.
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self { code: code.into(), message: message.into(), params: Value::Null }
+    }
+
+    /// Attaches the machine-readable parameters of the code.
+    #[must_use]
+    pub fn with_params(mut self, params: Value) -> Self {
+        self.params = params;
+        self
+    }
+
+    /// Returns the stable error code.
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    /// Returns the human-readable message.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Returns the machine-readable parameters, or `Value::Null` when absent.
+    pub fn params(&self) -> &Value {
+        &self.params
+    }
+}
+
+impl From<document_pdf::ServiceError> for ServiceError {
+    fn from(error: document_pdf::ServiceError) -> Self {
+        Self::new(error.code(), error.message())
+    }
+}
+
+impl std::fmt::Display for ServiceError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for ServiceError {}
 
 static TEMPORARY: AtomicU64 = AtomicU64::new(0);
 
@@ -123,7 +180,7 @@ fn search_report(
     selection: Option<(usize, &[usize])>,
 ) -> Result<Value, ServiceError> {
     if query.trim().is_empty() {
-        return Err(invalid_pages("`query` must be a non-empty string"));
+        return Err(invalid_pages_with("`query` must be a non-empty string", json!({ "arg": "query" })));
     }
     let limit = limit.map_or(100usize, |value| value.clamp(1, 500) as usize);
     let skip = skip as usize;
@@ -244,12 +301,12 @@ pub fn extract_images_pages(path: &Path, out_dir: &Path, ranges: &str) -> Result
         let temporary = temporary_path();
         let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("pdf");
         let request = DocumentArrange { order: Some(selected.clone()), rotate: None, remove: Some(remove) };
-        let outcome = (|| {
+        let outcome = (|| -> Result<Vec<ExtractedImage>, ServiceError> {
             arrange(path, &temporary, &request)?;
             let bytes = fs::read(&temporary).map_err(|error| {
                 ServiceError::new("io/read", format!("failed to read {}: {error}", temporary.display()))
             })?;
-            extract_images_bytes(&bytes, out_dir, stem)
+            Ok(extract_images_bytes(&bytes, out_dir, stem)?)
         })();
         let _ = fs::remove_file(&temporary);
         outcome?
@@ -286,28 +343,36 @@ fn parse_page_ranges(ranges: &str, page_count: usize) -> Result<Vec<usize>, Serv
     for raw in ranges.split(',') {
         let token = raw.trim();
         if token.is_empty() {
-            return Err(invalid_pages("page ranges contain an empty entry"));
+            return Err(invalid_pages_with("page ranges contain an empty entry", json!({ "pages": ranges })));
         }
         let (start, end) = match token.split_once('-') {
             Some((start, end)) => (start.trim(), end.trim()),
             None => (token, token),
         };
-        let start = start.parse::<usize>().map_err(|_| invalid_pages(format!("invalid page range `{token}`")))?;
-        let end = end.parse::<usize>().map_err(|_| invalid_pages(format!("invalid page range `{token}`")))?;
+        let start = start
+            .parse::<usize>()
+            .map_err(|_| invalid_pages_with(format!("invalid page range `{token}`"), json!({ "pages": ranges })))?;
+        let end = end
+            .parse::<usize>()
+            .map_err(|_| invalid_pages_with(format!("invalid page range `{token}`"), json!({ "pages": ranges })))?;
         if start == 0 || end == 0 {
-            return Err(invalid_pages("page numbers start at 1"));
+            return Err(invalid_pages_with("page numbers start at 1", json!({ "pages": ranges })));
         }
         if end < start {
-            return Err(invalid_pages(format!("page range `{token}` is reversed")));
+            return Err(invalid_pages_with(format!("page range `{token}` is reversed"), json!({ "pages": ranges })));
         }
         if end > page_count {
-            return Err(invalid_pages(format!(
-                "page range `{token}` is outside the {page_count}-page document"
-            )));
+            return Err(invalid_pages_with(
+                format!("page range `{token}` is outside the {page_count}-page document"),
+                json!({ "pages": ranges }),
+            ));
         }
         for page in start..=end {
             if selected.contains(&page) {
-                return Err(invalid_pages(format!("page {page} appears twice in the selection")));
+                return Err(invalid_pages_with(
+                    format!("page {page} appears twice in the selection"),
+                    json!({ "pages": ranges }),
+                ));
             }
             selected.push(page);
         }
@@ -330,7 +395,7 @@ pub fn clear_metadata(path: &Path, out: &Path) -> Result<SetMetadataReport, Serv
         creator: Some(String::new()),
         producer: Some(String::new()),
     };
-    document_pdf::set_metadata(path, out, &patch)
+    Ok(document_pdf::set_metadata(path, out, &patch)?)
 }
 
 /// Merges inputs after removing pages outside each input's selection.
@@ -350,22 +415,22 @@ pub fn merge_selected(
     title: Option<&str>,
 ) -> Result<Value, ServiceError> {
     if inputs.is_empty() {
-        return Err(invalid_pages("at least one input PDF is required"));
+        return Err(invalid_pages_with("at least one input PDF is required", json!({ "arg": "inputs" })));
     }
     if let Some(selections) = selections
         && selections.len() > inputs.len()
     {
-        return Err(invalid_pages(format!(
-            "{} page selections were given for {} input(s)",
-            selections.len(),
-            inputs.len()
-        )));
+        return Err(invalid_pages_with(
+            format!("{} page selections were given for {} input(s)", selections.len(), inputs.len()),
+            json!({ "arg": "selections" }),
+        ));
     }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     let scratch = temporary_path().with_extension("merge");
     let outcome = (|| -> Result<(MergeReport, Vec<Value>), ServiceError> {
@@ -420,7 +485,7 @@ pub fn duplicate_pages(
     overwrite: bool,
 ) -> Result<serde_json::Value, ServiceError> {
     if !(2..=100).contains(&times) {
-        return Err(invalid_pages("`times` must be between 2 and 100"));
+        return Err(invalid_pages_with("`times` must be between 2 and 100", json!({ "arg": "times" })));
     }
     let total = document_pdf::inspect(path)?.pages;
     let selected = parse_page_ranges(pages, total)?;
@@ -428,7 +493,8 @@ pub fn duplicate_pages(
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     // `arrange` refuses duplicate pages, so split the source into one-page
     // files and merge the repeated sequence back in order.
@@ -483,13 +549,14 @@ pub fn insert_pages(
         None => (1..=inserted).collect(),
     };
     if after as usize > total {
-        return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
+        return Err(invalid_pages_with(format!("page {after} is outside the {total}-page document"), json!({ "arg": "after" })));
     }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     // `arrange` cannot reach across documents, so split both files into
     // one-page parts and merge the interleaved sequence back in order.
@@ -511,7 +578,7 @@ pub fn insert_pages(
             inputs.push(PathBuf::from(&part.path));
         }
         inputs.extend(target.documents.iter().skip(after as usize).map(|part| PathBuf::from(&part.path)));
-        document_pdf::merge(&inputs, out, true, None)
+        Ok(document_pdf::merge(&inputs, out, true, None)?)
     })();
     let _ = fs::remove_dir_all(&target_scratch);
     let _ = fs::remove_dir_all(&insert_scratch);
@@ -535,11 +602,14 @@ pub fn insert_pages(
 /// the split route and written into `out_dir`.
 pub fn split_parts(path: &Path, parts: usize, out_dir: &Path) -> Result<serde_json::Value, ServiceError> {
     if parts == 0 {
-        return Err(invalid_pages("`parts` must be at least 1"));
+        return Err(invalid_pages_with("`parts` must be at least 1", json!({ "arg": "parts" })));
     }
     let total = document_pdf::inspect(path)?.pages;
     if parts > total {
-        return Err(invalid_pages(format!("`parts` {parts} is larger than the {total}-page document")));
+        return Err(invalid_pages_with(
+            format!("`parts` {parts} is larger than the {total}-page document"),
+            json!({ "arg": "parts" }),
+        ));
     }
     let base = total / parts;
     let extra = total % parts;
@@ -578,16 +648,17 @@ pub fn insert_blank_pages(
     let report = document_pdf::inspect(path)?;
     let total = report.pages;
     if after as usize > total {
-        return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
+        return Err(invalid_pages_with(format!("page {after} is outside the {total}-page document"), json!({ "arg": "after" })));
     }
     if !(1..=100).contains(&count) {
-        return Err(invalid_pages("`count` must be between 1 and 100"));
+        return Err(invalid_pages_with("`count` must be between 1 and 100", json!({ "arg": "count" })));
     }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     // A blank page is a page whose text is empty; `create` still writes the
     // MediaBox, so the inserted pages keep a real size.
@@ -611,7 +682,7 @@ pub fn insert_blank_pages(
         creator: None,
         page_numbers: None,
     });
-    let outcome = created.and_then(|_| insert_pages(path, &scratch, None, after, out, true));
+    let outcome = created.map_err(ServiceError::from).and_then(|_| insert_pages(path, &scratch, None, after, out, true));
     let _ = fs::remove_file(&scratch);
     let merged = outcome?;
     Ok(json!({
@@ -643,7 +714,7 @@ pub fn replace_pages(
     let selection = parse_page_ranges(pages, total)?;
     let available = document_pdf::inspect(insert)?.pages;
     if available == 0 {
-        return Err(invalid_pages("the replacement PDF has no pages"));
+        return Err(invalid_pages_with("the replacement PDF has no pages", json!({ "arg": "insert" })));
     }
     let chosen = match selected {
         Some(ranges) => parse_page_ranges(ranges, available)?,
@@ -654,7 +725,8 @@ pub fn replace_pages(
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     // `arrange` cannot reach across documents, so split both files into
     // one-page parts and merge the spliced sequence back in order.
@@ -682,7 +754,7 @@ pub fn replace_pages(
                 inputs.push(PathBuf::from(&part.path));
             }
         }
-        document_pdf::merge(&inputs, out, true, None)
+        Ok(document_pdf::merge(&inputs, out, true, None)?)
     })();
     let _ = fs::remove_dir_all(&target_scratch);
     let _ = fs::remove_dir_all(&insert_scratch);
@@ -715,7 +787,8 @@ pub fn reverse_pages(
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     let reversed = match selected {
         Some(ranges) => parse_page_ranges(ranges, total)?,
@@ -747,16 +820,20 @@ pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: b
     let total = document_pdf::inspect(path)?.pages;
     let selected = parse_page_ranges(pages, total)?;
     if after as usize > total {
-        return Err(invalid_pages(format!("page {after} is outside the {total}-page document")));
+        return Err(invalid_pages_with(format!("page {after} is outside the {total}-page document"), json!({ "arg": "after" })));
     }
     if after != 0 && selected.contains(&(after as usize)) {
-        return Err(invalid_pages(format!("page {after} is part of the selection being moved")));
+        return Err(invalid_pages_with(
+            format!("page {after} is part of the selection being moved"),
+            json!({ "arg": "after", "pages": pages }),
+        ));
     }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     let mut order: Vec<usize> = (1..=total).filter(|page| !selected.contains(page)).collect();
     let position = if after == 0 {
@@ -768,7 +845,9 @@ pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: b
             .iter()
             .position(|page| *page == anchor)
             .map(|index| index + 1)
-            .ok_or_else(|| invalid_pages(format!("page {after} is outside the {total}-page document")))?
+            .ok_or_else(|| {
+                invalid_pages_with(format!("page {after} is outside the {total}-page document"), json!({ "arg": "after" }))
+            })?
     };
     order.splice(position..position, selected.iter().copied());
     let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
@@ -794,20 +873,20 @@ pub fn swap_pages(path: &Path, pages: &str, with: &str, out: &Path, overwrite: b
     let left = parse_page_ranges(pages, total)?;
     let right = parse_page_ranges(with, total)?;
     if left.len() != right.len() {
-        return Err(invalid_pages(format!(
-            "`pages` and `with` must select the same number of pages, got {} and {}",
-            left.len(),
-            right.len()
-        )));
+        return Err(invalid_pages_with(
+            format!("`pages` and `with` must select the same number of pages, got {} and {}", left.len(), right.len()),
+            json!({ "pages": pages, "with": with }),
+        ));
     }
     if left.iter().any(|page| right.contains(page)) {
-        return Err(invalid_pages("`pages` and `with` must not share a page"));
+        return Err(invalid_pages_with("`pages` and `with` must not share a page", json!({ "pages": pages, "with": with })));
     }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     let mut order: Vec<usize> = (1..=total).collect();
     for (source, target) in left.iter().zip(&right) {
@@ -843,21 +922,22 @@ pub fn stamp_page_numbers(
     overwrite: bool,
 ) -> Result<Value, ServiceError> {
     if start < 1 {
-        return Err(invalid_pages("`start` must be at least 1"));
+        return Err(invalid_pages_with("`start` must be at least 1", json!({ "arg": "start" })));
     }
     let format = format.unwrap_or("{page} of {pages}");
     if format.trim().is_empty() {
-        return Err(invalid_pages("`format` must not be empty"));
+        return Err(invalid_pages_with("`format` must not be empty", json!({ "arg": "format" })));
     }
     let position = position.unwrap_or("bottom");
     if !matches!(position, "center" | "top" | "bottom") {
-        return Err(invalid_pages("`position` must be `center`, `top` or `bottom`"));
+        return Err(invalid_pages_with("`position` must be `center`, `top` or `bottom`", json!({ "arg": "position" })));
     }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     let total = document_pdf::inspect(path)?.pages;
     let selected = parse_page_ranges(pages, total)?;
@@ -1105,7 +1185,8 @@ pub fn interleave_pages(first: &Path, second: &Path, out: &Path, overwrite: bool
         return Err(ServiceError::new(
             "io/exists",
             format!("{} already exists; pass overwrite to replace it", out.display()),
-        ));
+        )
+        .with_params(json!({ "path": out.display().to_string() })));
     }
     let first_pages = document_pdf::inspect(first)?.pages;
     let second_pages = document_pdf::inspect(second)?.pages;
@@ -1131,7 +1212,7 @@ pub fn interleave_pages(first: &Path, second: &Path, out: &Path, overwrite: bool
                 inputs.push(PathBuf::from(&part.path));
             }
         }
-        document_pdf::merge(&inputs, out, true, None)
+        Ok(document_pdf::merge(&inputs, out, true, None)?)
     })();
     let _ = fs::remove_dir_all(&first_scratch);
     let _ = fs::remove_dir_all(&second_scratch);
@@ -1146,8 +1227,20 @@ pub fn interleave_pages(first: &Path, second: &Path, out: &Path, overwrite: bool
     }))
 }
 
+/// Builds a `session/argument-invalid` failure whose `reason` param carries the message.
 fn invalid_pages(message: impl Into<String>) -> ServiceError {
-    ServiceError::new("session/argument-invalid", message)
+    invalid_pages_with(message, Value::Null)
+}
+
+/// Builds a `session/argument-invalid` failure merging extra typed params over the `reason`.
+fn invalid_pages_with(message: impl Into<String>, extra: Value) -> ServiceError {
+    let message = message.into();
+    let mut params = serde_json::Map::new();
+    params.insert("reason".to_string(), json!(message.clone()));
+    if let Value::Object(extra) = extra {
+        params.extend(extra);
+    }
+    ServiceError::new("session/argument-invalid", message).with_params(Value::Object(params))
 }
 
 fn temporary_path() -> PathBuf {
