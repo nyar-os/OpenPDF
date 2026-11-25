@@ -344,6 +344,11 @@ fn split_bookmarks_cuts_the_document_at_each_top_level_entry() {
     assert_eq!(documents.len(), 3);
     for part in documents {
         assert_eq!(part["pages"], json!(2));
+        let losses = part["fidelity"].as_array().expect("every part reports its fidelity");
+        assert!(
+            losses.iter().any(|loss| loss["code"] == json!("outlines-dropped")),
+            "the source outline is dropped by each part: {losses:?}"
+        );
     }
 
     let first = extract_text(Path::new(documents[0]["path"].as_str().expect("path"))).expect("extract first");

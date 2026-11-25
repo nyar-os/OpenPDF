@@ -900,45 +900,26 @@ pub fn stamp_page_numbers(
 
 /// Splits one PDF into consecutive files at its top-level bookmarks.
 ///
-/// The outline is read directly: every level-one entry names the page where a
-/// new file starts, and the ranges between consecutive bookmark pages are
-/// written by `split`. Pages before the first bookmark form their own file
-/// when there are any. A document without top-level bookmarks fails with
-/// `session/argument-invalid`, as does a bookmark whose destination cannot be
-/// resolved to a page of the document; nothing is written in either case.
+/// The outline tree is read through `document.pdf`'s resolved outline report:
+/// every level-one entry names the page where a new file starts, and the
+/// ranges between consecutive bookmark pages are written by `split`. Pages
+/// before the first bookmark form their own file when there are any. A
+/// document without top-level bookmarks fails with `session/argument-invalid`,
+/// as does a bookmark whose destination cannot be resolved to a page of the
+/// document; nothing is written in either case.
 pub fn split_bookmarks(path: &Path, out_dir: &Path) -> Result<Value, ServiceError> {
-    let bytes = fs::read(path)
-        .map_err(|error| ServiceError::new("io/read", format!("failed to read {}: {error}", path.display())))?;
-    let document = data_binary_pdf::parse_document(&bytes)
-        .map_err(|error| ServiceError::new("format/invalid", format!("{} is not a readable PDF: {error}", path.display())))?;
-    let total = document.pages.len();
-    let mut entries: Vec<(String, usize)> = Vec::new();
-    let outlines = document
-        .catalog
-        .get("Outlines")
-        .and_then(|object| resolve_document(&document, object))
-        .and_then(data_binary_pdf::PdfObject::as_dict);
-    if let Some(root) = outlines {
-        let mut current = root.get("First").and_then(|object| resolve_document(&document, object)).cloned();
-        while let Some(object) = current {
-            let Some(item) = object.as_dict() else { break };
-            let title = item
-                .get("Title")
-                .and_then(|title| match title {
-                    data_binary_pdf::PdfObject::String(text) => Some(data_binary_pdf::decode_text_string(text)),
-                    _ => None,
-                })
-                .unwrap_or_default();
-            let Some(page) = bookmark_page(&document, item) else {
-                return Err(invalid_pages(format!("bookmark `{title}` has no internal destination")));
-            };
-            entries.push((title, page));
-            current = item.get("Next").and_then(|object| resolve_document(&document, object)).cloned();
-        }
-    }
+    let entries: Vec<(String, usize)> = document_pdf::list_outline(path)?
+        .into_iter()
+        .filter(|entry| entry.depth == 1)
+        .map(|entry| match entry.page {
+            Some(page) => Ok((entry.title, page)),
+            None => Err(invalid_pages(format!("bookmark `{}` has no internal destination", entry.title))),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     if entries.is_empty() {
         return Err(invalid_pages("the document has no bookmarks"));
     }
+    let total = document_pdf::inspect(path)?.pages;
     let mut boundaries: Vec<usize> = entries.iter().map(|(_, page)| *page).collect();
     boundaries.sort_unstable();
     boundaries.dedup();
@@ -1007,50 +988,6 @@ pub fn list_destinations(path: &Path) -> Result<Value, ServiceError> {
     let destinations = document_pdf::list_destinations(path)?;
     serde_json::to_value(destinations)
         .map_err(|error| ServiceError::new("format/invalid", format!("the destination report cannot be serialized: {error}")))
-}
-
-/// Reports the one-based page a link or bookmark destination points at.
-///
-/// A destination may be an array whose first element names the page or a
-/// direct reference to the page dictionary; named destinations and anything
-/// that does not resolve to a page of this document yield `None`.
-fn destination_page(document: &data_binary_pdf::PdfDocument, destination: &data_binary_pdf::PdfObject) -> Option<usize> {
-    let page_object = match destination {
-        data_binary_pdf::PdfObject::Array(values) => values.first()?,
-        other => other,
-    };
-    let resolved = resolve_document(document, page_object)?;
-    let data_binary_pdf::PdfObject::Dictionary(dict) = resolved else {
-        return None;
-    };
-    document.pages.iter().position(|page| page.own == *dict).map(|index| index + 1)
-}
-
-/// Resolves an indirect reference against the parsed object table.
-fn resolve_document<'a>(
-    document: &'a data_binary_pdf::PdfDocument,
-    object: &'a data_binary_pdf::PdfObject,
-) -> Option<&'a data_binary_pdf::PdfObject> {
-    data_binary_pdf::resolve_object(&document.objects, object).ok()
-}
-
-/// Reports the one-based page a top-level outline entry points at.
-///
-/// Both a direct `/Dest` array and a `/GoTo` action are accepted; the
-/// destination must resolve to a dictionary that is one of the document's
-/// pages, otherwise `None` is returned.
-fn bookmark_page(document: &data_binary_pdf::PdfDocument, item: &data_binary_pdf::Dict) -> Option<usize> {
-    let destination = match item.get("Dest") {
-        Some(object) => object,
-        None => {
-            let action = item.get("A").and_then(|object| resolve_document(document, object))?.as_dict()?;
-            if action.get("S").and_then(data_binary_pdf::PdfObject::as_name) != Some("GoTo") {
-                return None;
-            }
-            action.get("D")?
-        }
-    };
-    destination_page(document, destination)
 }
 
 /// Interleaves the pages of two PDFs into one document.
