@@ -496,30 +496,12 @@ pub fn duplicate_pages(
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    // `arrange` refuses duplicate pages, so split the source into one-page
-    // files and merge the repeated sequence back in order.
-    let scratch = temporary_path().with_extension("dup");
-    let split = document_pdf::split_every(path, 1, &scratch)?;
-    let mut inputs = Vec::with_capacity(total + selected.len() * (times as usize - 1));
-    for part in &split.documents {
-        inputs.push(PathBuf::from(&part.path));
-        let page = part.path.rsplit_once("-p").and_then(|(_, tail)| tail.split('.').next()).and_then(|number| number.parse::<usize>().ok());
-        let Some(page) = page else {
-            let _ = fs::remove_dir_all(&scratch);
-            return Err(ServiceError::new("format/invalid", "split pages are not named by page number"));
-        };
-        if selected.contains(&page) {
-            for _ in 1..times {
-                inputs.push(PathBuf::from(&part.path));
-            }
-        }
-    }
-    let merged = document_pdf::merge(&inputs, out, true, None);
-    let _ = fs::remove_dir_all(&scratch);
-    let merged = merged?;
+    // Upstream compose builds the repeated sequence in one pass, so no
+    // temporary split-and-merge round trip is needed here.
+    let composed = document_pdf::duplicate_pages(path, &selected, times, out, overwrite)?;
     Ok(json!({
-        "path": merged.path,
-        "pages": merged.pages,
+        "path": composed.path,
+        "pages": composed.pages,
         "sourcePages": total,
         "duplicated": selected,
         "times": times,
@@ -558,34 +540,12 @@ pub fn insert_pages(
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    // `arrange` cannot reach across documents, so split both files into
-    // one-page parts and merge the interleaved sequence back in order.
-    let target_scratch = temporary_path().with_extension("ins-a");
-    let insert_scratch = temporary_path().with_extension("ins-b");
-    let outcome = (|| {
-        let target = document_pdf::split_every(path, 1, &target_scratch)?;
-        let parts = document_pdf::split_every(insert, 1, &insert_scratch)?;
-        if target.documents.len() != total || parts.documents.len() != inserted {
-            return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
-        }
-        let mut inputs = Vec::with_capacity(total + inserted);
-        inputs.extend(target.documents.iter().take(after as usize).map(|part| PathBuf::from(&part.path)));
-        for page in &chosen {
-            let part = parts
-                .documents
-                .get(*page as usize - 1)
-                .ok_or_else(|| ServiceError::new("format/invalid", "a selected page is missing from the split output"))?;
-            inputs.push(PathBuf::from(&part.path));
-        }
-        inputs.extend(target.documents.iter().skip(after as usize).map(|part| PathBuf::from(&part.path)));
-        Ok(document_pdf::merge(&inputs, out, true, None)?)
-    })();
-    let _ = fs::remove_dir_all(&target_scratch);
-    let _ = fs::remove_dir_all(&insert_scratch);
-    let merged = outcome?;
+    // Upstream compose splices both documents through one page plan, so no
+    // temporary split-and-merge round trip is needed here.
+    let composed = document_pdf::insert_pages(path, insert, after as usize, Some(&chosen), out, overwrite)?;
     Ok(json!({
-        "path": merged.path,
-        "pages": merged.pages,
+        "path": composed.path,
+        "pages": composed.pages,
         "sourcePages": total,
         "insertedPages": chosen.len(),
         "sourceInsertPages": inserted,
@@ -660,44 +620,68 @@ pub fn insert_blank_pages(
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    // A blank page is a page whose text is empty; `create` still writes the
-    // MediaBox, so the inserted pages keep a real size.
-    let page_size = size.map(str::to_owned).or_else(|| {
-        report.page_sizes.first().map(|page| format!("{}x{}", page.width_pt, page.height_pt))
-    });
-    let scratch = temporary_path().with_extension("blank.pdf");
-    let created = document_pdf::create(&CreateRequest {
-        out: scratch.clone(),
-        title: None,
-        pages: vec![String::new(); count as usize],
-        overwrite: true,
-        page_size,
-        font: None,
-        font_size: None,
-        margin_pt: None,
-        align: None,
-        author: None,
-        subject: None,
-        keywords: None,
-        creator: None,
-        page_numbers: None,
-    });
-    let outcome = created.map_err(ServiceError::from).and_then(|_| insert_pages(path, &scratch, None, after, out, true));
-    let _ = fs::remove_file(&scratch);
-    let merged = outcome?;
+    // Upstream compose writes real blank pages inside the plan, so no
+    // temporary created PDF or split-and-merge round trip is needed here.
+    let size = match size {
+        Some(raw) => Some(parse_blank_size(raw)?),
+        None => None,
+    };
+    let composed = document_pdf::insert_blank_pages(path, after as usize, count as usize, size, out, overwrite)?;
     Ok(json!({
-        "path": merged["path"],
-        "pages": merged["pages"],
+        "path": composed.path,
+        "pages": composed.pages,
         "sourcePages": total,
         "insertedPages": count,
         "after": after,
     }))
 }
 
+/// Resolves a blank-page size spelling into points.
+///
+/// Accepts the same named papers as `create` (`a3`, `a4`, `a5`, `letter`,
+/// `legal`, `tabloid`), an explicit `WIDTHxHEIGHT` extent in points, and an
+/// empty spelling as the default Letter geometry. Anything else fails with
+/// `session/argument-invalid` naming the `size` argument.
+fn parse_blank_size(size: &str) -> Result<(f64, f64), ServiceError> {
+    let raw = size.trim();
+    if raw.is_empty() {
+        return Ok((612.0, 792.0));
+    }
+    let (width, height) = match raw.to_ascii_lowercase().as_str() {
+        "a3" => (841.89, 1190.55),
+        "a4" => (595.28, 841.89),
+        "a5" => (419.53, 595.28),
+        "letter" | "us-letter" => (612.0, 792.0),
+        "legal" | "us-legal" => (612.0, 1008.0),
+        "tabloid" => (792.0, 1224.0),
+        other => {
+            let Some((width, height)) = other.split_once('x') else {
+                return Err(invalid_pages_with(
+                    format!("page size `{raw}` is not a named size or a WIDTHxHEIGHT extent such as 400x600"),
+                    json!({ "arg": "size" }),
+                ));
+            };
+            let width = width
+                .trim()
+                .parse::<f64>()
+                .map_err(|_| invalid_pages_with(format!("page width in `{raw}` is not a number"), json!({ "arg": "size" })))?;
+            let height = height
+                .trim()
+                .parse::<f64>()
+                .map_err(|_| invalid_pages_with(format!("page height in `{raw}` is not a number"), json!({ "arg": "size" })))?;
+            (width, height)
+        }
+    };
+    if !width.is_finite() || !height.is_finite() || !(100.0..=14400.0).contains(&width) || !(100.0..=14400.0).contains(&height) {
+        return Err(invalid_pages_with("page width and height must be between 100 and 14400 points", json!({ "arg": "size" })));
+    }
+    Ok((width, height))
+}
+
 /// Replaces the selected pages of one PDF with pages of another PDF.
 ///
 /// The selected pages are removed and the chosen replacement pages take the
-/// position of the first removed page; the remaining pages keep their order.
+/// position of the lowest removed page; the remaining pages keep their order.
 /// `selected` is an optional one-based source range list such as `3,1`, so the
 /// replacement pages follow that order instead of the whole input; every page
 /// is used when it is omitted. The output is replaced when it already exists
@@ -728,40 +712,12 @@ pub fn replace_pages(
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    // `arrange` cannot reach across documents, so split both files into
-    // one-page parts and merge the spliced sequence back in order.
-    let target_scratch = temporary_path().with_extension("rep-a");
-    let insert_scratch = temporary_path().with_extension("rep-b");
-    let outcome = (|| {
-        let target = document_pdf::split_every(path, 1, &target_scratch)?;
-        let parts = document_pdf::split_every(insert, 1, &insert_scratch)?;
-        if target.documents.len() != total {
-            return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
-        }
-        let first = selection.first().copied().unwrap_or_default();
-        let mut inputs = Vec::with_capacity(total + chosen.len());
-        for (index, part) in target.documents.iter().enumerate() {
-            let page = index + 1;
-            if page == first {
-                for source in &chosen {
-                    let part = parts.documents.get(*source as usize - 1).ok_or_else(|| {
-                        ServiceError::new("format/invalid", "a selected replacement page is missing from the split output")
-                    })?;
-                    inputs.push(PathBuf::from(&part.path));
-                }
-            }
-            if !selection.contains(&page) {
-                inputs.push(PathBuf::from(&part.path));
-            }
-        }
-        Ok(document_pdf::merge(&inputs, out, true, None)?)
-    })();
-    let _ = fs::remove_dir_all(&target_scratch);
-    let _ = fs::remove_dir_all(&insert_scratch);
-    let merged = outcome?;
+    // Upstream compose splices the replacement pages at the lowest selected
+    // page in one pass, so no temporary split-and-merge round trip is needed.
+    let composed = document_pdf::replace_pages(path, &selection, insert, Some(&chosen), out, overwrite)?;
     Ok(json!({
-        "path": merged.path,
-        "pages": merged.pages,
+        "path": composed.path,
+        "pages": composed.pages,
         "sourcePages": total,
         "replaced": selection,
         "replacementPages": replacement,
@@ -1051,83 +1007,43 @@ pub fn split_bookmarks(path: &Path, out_dir: &Path) -> Result<Value, ServiceErro
 /// entry carries the one-based `page`, the annotation `rect` when it is four
 /// numbers, the external `uri` for URI actions and the one-based
 /// `destination` page for internal `GoTo` targets, whether the target sits in
-/// an `/A` action or a direct `/Dest`. `uri` and `destination` are `null` when
-/// the annotation has no resolvable target.
+/// an `/A` action or a direct `/Dest`, including named destinations and
+/// `GoToE` targets resolved inside an embedded document. `uri` and
+/// `destination` are `null` when the annotation has no resolvable target.
 pub fn extract_links(path: &Path) -> Result<Value, ServiceError> {
-    let bytes = fs::read(path)
-        .map_err(|error| ServiceError::new("io/read", format!("failed to read {}: {error}", path.display())))?;
-    let document = data_binary_pdf::parse_document(&bytes)
-        .map_err(|error| ServiceError::new("format/invalid", format!("{} is not a readable PDF: {error}", path.display())))?;
-    let mut links: Vec<Value> = Vec::new();
-    for (index, page) in document.pages.iter().enumerate() {
-        let annotations = page
-            .own
-            .get("Annots")
-            .and_then(|annots| resolve_document(&document, annots))
-            .and_then(data_binary_pdf::PdfObject::as_array);
-        for annotation in annotations.unwrap_or_default() {
-            let Some(annotation) =
-                resolve_document(&document, annotation).and_then(data_binary_pdf::PdfObject::as_dict)
-            else {
-                continue;
-            };
-            if annotation.get("Subtype").and_then(data_binary_pdf::PdfObject::as_name) != Some("Link") {
-                continue;
-            }
-            let rect = annotation
-                .get("Rect")
-                .and_then(|rect| resolve_document(&document, rect))
-                .and_then(data_binary_pdf::PdfObject::as_array)
-                .filter(|values| values.len() == 4)
-                .map(|values| values.iter().filter_map(object_number).collect::<Vec<f64>>())
-                .filter(|numbers| numbers.len() == 4);
-            let mut uri: Option<String> = None;
-            let mut destination: Option<usize> = None;
-            if let Some(action) =
-                annotation.get("A").and_then(|action| resolve_document(&document, action)).and_then(|action| action.as_dict())
-            {
-                match action.get("S").and_then(data_binary_pdf::PdfObject::as_name) {
-                    Some("URI") => {
-                        if let Some(data_binary_pdf::PdfObject::String(text)) = action.get("URI") {
-                            uri = Some(data_binary_pdf::decode_text_string(text));
-                        }
-                    }
-                    Some("GoTo") => {
-                        if let Some(target) = action.get("D") {
-                            destination = destination_page(&document, target);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            if uri.is_none() && destination.is_none() {
-                if let Some(target) = annotation.get("Dest") {
-                    destination = destination_page(&document, target);
-                }
-            }
-            links.push(json!({
-                "page": index + 1,
-                "rect": rect,
-                "uri": uri,
-                "destination": destination,
-            }));
-        }
-    }
+    let report = document_pdf::inspect(path)?;
+    let records = document_pdf::extract_links(path)?;
+    let links = records
+        .iter()
+        .map(|record| {
+            json!({
+                "page": record.page,
+                "rect": record.rect,
+                "uri": matches!(record.kind, document_pdf::LinkKind::Uri).then_some(record.target.clone()).flatten(),
+                "destination": matches!(record.kind, document_pdf::LinkKind::GoTo | document_pdf::LinkKind::GoToEmbedded)
+                    .then_some(record.destination)
+                    .flatten(),
+            })
+        })
+        .collect::<Vec<_>>();
     Ok(json!({
         "path": path.display().to_string(),
-        "pages": document.pages.len(),
+        "pages": report.pages,
         "count": links.len(),
         "links": links,
     }))
 }
 
-/// Reads an integer or real object as a number.
-fn object_number(object: &data_binary_pdf::PdfObject) -> Option<f64> {
-    match object {
-        data_binary_pdf::PdfObject::Integer(value) => Some(*value as f64),
-        data_binary_pdf::PdfObject::Real(value) => Some(*value),
-        _ => None,
-    }
+/// Lists the named destinations a PDF resolves to pages of itself.
+///
+/// `/Root/Dests` is read first and the classic `/Root/Names/Dests` tree is
+/// used as the fallback. Each entry carries the destination `name` as spelled
+/// in the name tree and the one-based `page` it points at; destinations that
+/// do not resolve to a page of the document are skipped.
+pub fn list_destinations(path: &Path) -> Result<Value, ServiceError> {
+    let destinations = document_pdf::list_destinations(path)?;
+    serde_json::to_value(destinations)
+        .map_err(|error| ServiceError::new("format/invalid", format!("the destination report cannot be serialized: {error}")))
 }
 
 /// Reports the one-based page a link or bookmark destination points at.
@@ -1193,33 +1109,12 @@ pub fn interleave_pages(first: &Path, second: &Path, out: &Path, overwrite: bool
     if first_pages == 0 || second_pages == 0 {
         return Err(invalid_pages("both documents must carry at least one page"));
     }
-    // `merge` cannot interleave across documents, so split both files into
-    // one-page parts and merge the alternating sequence back in order.
-    let first_scratch = temporary_path().with_extension("int-a");
-    let second_scratch = temporary_path().with_extension("int-b");
-    let outcome = (|| {
-        let a = document_pdf::split_every(first, 1, &first_scratch)?;
-        let b = document_pdf::split_every(second, 1, &second_scratch)?;
-        if a.documents.len() != first_pages || b.documents.len() != second_pages {
-            return Err(ServiceError::new("format/invalid", "split did not produce one file per page"));
-        }
-        let mut inputs = Vec::with_capacity(a.documents.len() + b.documents.len());
-        for index in 0..std::cmp::max(a.documents.len(), b.documents.len()) {
-            if let Some(part) = a.documents.get(index) {
-                inputs.push(PathBuf::from(&part.path));
-            }
-            if let Some(part) = b.documents.get(index) {
-                inputs.push(PathBuf::from(&part.path));
-            }
-        }
-        Ok(document_pdf::merge(&inputs, out, true, None)?)
-    })();
-    let _ = fs::remove_dir_all(&first_scratch);
-    let _ = fs::remove_dir_all(&second_scratch);
-    let merged = outcome?;
+    // Upstream compose alternates the two documents through one page plan,
+    // so no temporary split-and-merge round trip is needed here.
+    let composed = document_pdf::interleave_pages(first, second, out, overwrite)?;
     Ok(json!({
-        "path": merged.path,
-        "pages": merged.pages,
+        "path": composed.path,
+        "pages": composed.pages,
         "first": first.display().to_string(),
         "firstPages": first_pages,
         "second": second.display().to_string(),
