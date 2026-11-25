@@ -619,6 +619,14 @@ fn pdf_extract_links(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Lists the named destinations one PDF file resolves to its own pages.
+#[function]
+fn pdf_list_destinations(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let report = open_pdf_core::list_destinations(std::path::Path::new(&path)).map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 /// Interleaves the pages of two PDF files into one new PDF.
 #[function]
 fn pdf_interleave_pages(ctx: CallContext) -> Result<JsValue> {
@@ -675,5 +683,6 @@ register_module![
     pdf_stamp,
     pdf_stamp_page_numbers,
     pdf_extract_links,
+    pdf_list_destinations,
     pdf_interleave_pages
 ];
