@@ -69,6 +69,13 @@ test('a page range beyond the document relays `session/argument-invalid`', { ski
     assert.equal(run.status, 1);
     assert.equal(run.envelope.ok, false);
     assert.equal(run.envelope.error?.code, 'session/argument-invalid');
+    const selection = runCli(['extract-text', 'src.pdf', '--pages', '999', '--json', '--locale', 'en-US'], dir);
+    assert.equal(selection.envelope.error?.code, 'session/argument-invalid');
+    assert.match(
+        selection.envelope.error?.message ?? '',
+        /the request was rejected: page range `999`/,
+        'the typed reason renders through the envelope',
+    );
 });
 
 test('an existing target without `--overwrite` relays `io/exists`', { skip: !installed }, (t) => {
@@ -78,6 +85,7 @@ test('an existing target without `--overwrite` relays `io/exists`', { skip: !ins
     const blocked = runCli(['delete-pages', 'src.pdf', '--pages', '1', '-o', 'src.pdf', '--json'], dir);
     assert.equal(blocked.status, 1);
     assert.equal(blocked.envelope.error?.code, 'io/exists');
+    assert.match(blocked.envelope.error?.message ?? '', /src\.pdf/, 'the blocked path reaches the envelope');
     const forced = runCli(['delete-pages', 'src.pdf', '--pages', '1', '-o', 'src.pdf', '--overwrite', '--json'], dir);
     assert.equal(forced.status, 0);
     assert.equal(forced.envelope.ok, true);

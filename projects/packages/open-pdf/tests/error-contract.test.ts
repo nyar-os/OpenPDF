@@ -73,6 +73,30 @@ test('a broken params payload degrades to an empty parameter map', () => {
     assert.equal(error.message, 'disk said no', 'an unrenderable template keeps the binding text');
 });
 
+test('io/exists renders localized copy from the typed `path` param', () => {
+    process.env.OPEN_PDF_STUB = JSON.stringify({
+        message: 'REPLACED NATIVE TEXT',
+        code: 'io/exists',
+        detail: { params: { path: 'out.pdf' } },
+    });
+    const error = capture();
+    assert.equal(error.code, 'io/exists');
+    assert.deepEqual(error.params, { path: 'out.pdf' });
+    assert.equal(error.message, '`out.pdf` already exists; pass overwrite to replace it');
+});
+
+test('session/argument-invalid renders the typed `reason`', () => {
+    process.env.OPEN_PDF_STUB = JSON.stringify({
+        message: 'REPLACED NATIVE TEXT',
+        code: 'session/argument-invalid',
+        detail: { params: { reason: 'page range `999` is outside the 3-page document', pages: '999' } },
+    });
+    const error = capture();
+    assert.equal(error.code, 'session/argument-invalid');
+    assert.deepEqual(error.params, { reason: 'page range `999` is outside the 3-page document', pages: '999' });
+    assert.equal(error.message, 'the request was rejected: page range `999` is outside the 3-page document');
+});
+
 test('legacy `code: message` concatenation still decodes at the adapter entry', () => {
     process.env.OPEN_PDF_STUB = JSON.stringify({ message: 'format/unsupported: old binding text' });
     const error = capture();

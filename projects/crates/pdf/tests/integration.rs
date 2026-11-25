@@ -67,8 +67,8 @@ impl Drop for Workspace {
     }
 }
 
-fn assert_invalid<T: std::fmt::Debug>(result: Result<T, open_pdf_core::ServiceError>, expected: &str) {
-    let error = result.expect_err("expected a failure");
+fn assert_invalid<T: std::fmt::Debug, E: Into<open_pdf_core::ServiceError>>(result: std::result::Result<T, E>, expected: &str) {
+    let error: open_pdf_core::ServiceError = result.expect_err("expected a failure").into();
     assert_eq!(error.code(), expected, "unexpected error: {error}");
 }
 
@@ -159,6 +159,8 @@ fn extract_text_pages_keeps_only_the_requested_pages_in_order() {
     let error = extract_text_pages(&path, "4").expect_err("page is outside the document");
     assert_eq!(error.code(), "session/argument-invalid");
     assert!(error.message().contains("3-page document"), "unexpected message: {}", error.message());
+    assert_eq!(error.params()["pages"], json!("4"), "the rejected selection is named");
+    assert_eq!(error.params()["reason"], json!(error.message()), "the reason carries the message");
 }
 
 #[test]
@@ -204,6 +206,7 @@ fn search_reports_line_scoped_matches_and_honours_the_limit() {
 
     let empty = search(&path, "   ", None, true, false, 0).expect_err("empty query");
     assert_eq!(empty.code(), "session/argument-invalid");
+    assert_eq!(empty.params()["arg"], json!("query"), "the rejected argument is named");
 }
 
 #[test]
@@ -242,6 +245,7 @@ fn extract_text_pages_rejects_malformed_ranges() {
     for ranges in ["", "0", "2-1", "1,,2", "1,1", "a", "1-"] {
         let error = extract_text_pages(&path, ranges).expect_err("invalid ranges");
         assert_eq!(error.code(), "session/argument-invalid", "ranges `{ranges}`");
+        assert_eq!(error.params()["pages"], json!(ranges), "ranges `{ranges}` name the selection");
     }
 }
 
@@ -1194,9 +1198,13 @@ fn duplicate_pages_repeats_the_selection_in_place() {
     let three = text.find("Three").expect("Three");
     assert!(one < first_two && first_two < second_two && second_two < three, "unexpected order: {text}");
 
-    assert_invalid(duplicate_pages(&path, "1", 2, &out, false), "io/exists");
+    let error = duplicate_pages(&path, "1", 2, &out, false).expect_err("existing output must fail");
+    assert_eq!(error.code(), "io/exists");
+    assert_eq!(error.params()["path"], json!(out.display().to_string()), "the blocked output is named");
     assert_invalid(duplicate_pages(&path, "1", 1, &workspace.path("times.pdf"), true), "session/argument-invalid");
-    assert_invalid(duplicate_pages(&path, "9", 2, &workspace.path("range.pdf"), true), "session/argument-invalid");
+    let error = duplicate_pages(&path, "9", 2, &workspace.path("range.pdf"), true).expect_err("page outside the document");
+    assert_eq!(error.code(), "session/argument-invalid");
+    assert_eq!(error.params()["pages"], json!("9"), "the rejected selection is named");
 }
 
 #[test]
@@ -1271,7 +1279,9 @@ fn insert_blank_pages_keeps_order_and_geometry() {
     assert!((inspected.page_sizes[0].width_pt - 595.276).abs() < 1.0, "the explicit size wins: {inspected:?}");
 
     assert_invalid(insert_blank_pages(&target, 3, 1, None, &out, true), "session/argument-invalid");
-    assert_invalid(insert_blank_pages(&target, 0, 0, None, &workspace.path("zero.pdf"), true), "session/argument-invalid");
+    let error = insert_blank_pages(&target, 0, 0, None, &workspace.path("zero.pdf"), true).expect_err("count below one");
+    assert_eq!(error.code(), "session/argument-invalid");
+    assert_eq!(error.params()["arg"], json!("count"), "the rejected argument is named");
     assert_invalid(insert_blank_pages(&target, 0, 101, None, &workspace.path("many.pdf"), true), "session/argument-invalid");
     assert_invalid(insert_blank_pages(&target, 1, 1, None, &out, false), "io/exists");
 }
@@ -1382,7 +1392,10 @@ fn move_pages_relocates_a_selection_after_one_anchor() {
     assert!(three < four && four < one && one < two, "unexpected order: {text}");
 
     assert_invalid(move_pages(&path, "2", 9, &workspace.path("bad.pdf"), true), "session/argument-invalid");
-    assert_invalid(move_pages(&path, "2-3", 2, &workspace.path("bad-anchor.pdf"), true), "session/argument-invalid");
+    let error = move_pages(&path, "2-3", 2, &workspace.path("bad-anchor.pdf"), true).expect_err("anchor inside the selection");
+    assert_eq!(error.code(), "session/argument-invalid");
+    assert_eq!(error.params()["arg"], json!("after"), "the rejected argument is named");
+    assert_eq!(error.params()["pages"], json!("2-3"), "the selection is named");
     assert_invalid(move_pages(&path, "1", 3, &out, false), "io/exists");
 }
 
@@ -2050,7 +2063,9 @@ fn merge_selected_rejects_bad_ranges_and_existing_output() {
     );
 
     fs::write(&merged, b"placeholder").expect("seed output");
-    assert_invalid(merge_selected(&[first], None, &merged, false, None), "io/exists");
+    let error = merge_selected(&[first], None, &merged, false, None).expect_err("existing output must fail");
+    assert_eq!(error.code(), "io/exists");
+    assert_eq!(error.params()["path"], json!(merged.display().to_string()), "the blocked output is named");
     let report = merge_selected(&[workspace.create("other.pdf", None, &["CCC"])], None, &merged, true, None)
         .expect("overwrite replaces the output");
     assert_eq!(report["pages"], json!(1));
