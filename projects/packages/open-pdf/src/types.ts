@@ -258,6 +258,8 @@ export interface MergeReport {
 export interface SplitPart {
     readonly path: string;
     readonly pages: number;
+    /** Objects the rebuilt catalog and the pages this part leaves out lost, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `split()`. */
