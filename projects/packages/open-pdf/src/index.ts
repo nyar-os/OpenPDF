@@ -53,8 +53,24 @@ import type {
     SwapPagesReport,
 } from './types.js';
 
-export { OpenPdfError, NotImplementedError, errorCodes, isOpenPdfError, renderErrorCopy, setErrorLocale } from './errors.js';
-export type { OpenPdfErrorCode, OpenPdfErrorDetails, OpenPdfErrorOptions, OpenPdfErrorParams } from './errors.js';
+export {
+    OpenPdfError,
+    NotImplementedError,
+    errorCodes,
+    isOpenPdfError,
+    normalizeErrorParams,
+    parseErrorParams,
+    renderErrorCopy,
+    setErrorLocale,
+} from './errors.js';
+export type {
+    ErrorParamsByCode,
+    OpenPdfErrorCode,
+    OpenPdfErrorDetails,
+    OpenPdfErrorOptions,
+    OpenPdfErrorParams,
+    OpenPdfFailure,
+} from './errors.js';
 export { documentFormats, formatFromPath, formatInfo, isPdfPath } from './formats.js';
 export type { PdfFormat, PdfFormatInfo } from './formats.js';
 export type * from './types.js';

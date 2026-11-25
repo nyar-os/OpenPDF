@@ -8,14 +8,7 @@
 
 import { copyFileSync, existsSync, statSync } from 'node:fs';
 
-import {
-    NotImplementedError,
-    OpenPdfError,
-    errorCodes,
-    renderErrorCopy,
-    type OpenPdfErrorCode,
-    type OpenPdfErrorParams,
-} from './errors.js';
+import { NotImplementedError, OpenPdfError, normalizeErrorParams, renderErrorCopy } from './errors.js';
 import { nativeBinding } from './native.js';
 import type {
     ArrangeReport,
@@ -60,8 +53,6 @@ import type {
     SwapPagesReport,
 } from './types.js';
 
-const knownCodes = new Set<string>(errorCodes);
-
 function binding(feature: string) {
     const native = nativeBinding();
     if (!native) {
@@ -85,30 +76,17 @@ function translate(error: unknown): OpenPdfError {
     const native = error instanceof Error ? (error as Error & { code?: unknown; detail?: unknown }) : undefined;
     const message = native ? native.message : String(error);
     const rawCode = native?.code;
-    const code = typeof rawCode === 'string' ? rawCode : undefined;
-    if (code !== undefined) {
-        const params = readParams(native?.detail);
-        return new OpenPdfError(code as OpenPdfErrorCode, renderErrorCopy(code, params, message), { params, cause: error });
-    }
-    // Compatibility entry for addons older than the structured contract, which
-    // concatenated `code: message` into the Error text. Current bindings always
-    // carry `code`, so this split never runs against them.
-    const separator = message.indexOf(': ');
-    const legacy = separator > 0 ? message.slice(0, separator) : '';
-    if (knownCodes.has(legacy)) {
-        return new OpenPdfError(legacy as OpenPdfErrorCode, message.slice(separator + 2), { cause: error });
+    if (typeof rawCode === 'string') {
+        // The binding delivers a `code` plus a payload; the payload is validated
+        // against the code's frozen shape instead of being trusted as-is.
+        const params = normalizeErrorParams(rawCode, readPayload(native?.detail));
+        return new OpenPdfError(rawCode, renderErrorCopy(rawCode, params, message), { params, cause: error });
     }
     return new OpenPdfError('binding/failure', message, { cause: error });
 }
 
-function readParams(detail: unknown): OpenPdfErrorParams {
-    if (typeof detail === 'object' && detail !== null) {
-        const params = (detail as { params?: unknown }).params;
-        if (typeof params === 'object' && params !== null && !Array.isArray(params)) {
-            return params as OpenPdfErrorParams;
-        }
-    }
-    return {};
+function readPayload(detail: unknown): unknown {
+    return typeof detail === 'object' && detail !== null ? (detail as { params?: unknown }).params : undefined;
 }
 
 /** Reports the installed addon version. */

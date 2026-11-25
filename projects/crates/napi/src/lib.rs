@@ -66,8 +66,10 @@ fn failure<E: Into<open_pdf_core::ServiceError>>(error: E) -> Error {
     // `code: message`, so the SDK classifies on `code` and never parses prose.
     let error = error.into();
     let mut failure = Error::new(error.message().to_owned()).code(error.code().to_owned());
-    if !error.params().is_null() {
-        failure = failure.detail(serde_json::json!({ "params": error.params() }));
+    // Only a payload that matches the code's frozen shape is delivered; a
+    // missing or malformed payload is withheld rather than forwarded.
+    if let Some(params) = error.frozen_params() {
+        failure = failure.detail(serde_json::json!({ "params": params }));
     }
     failure
 }

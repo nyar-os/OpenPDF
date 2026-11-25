@@ -27,8 +27,8 @@ const CLI = fileURLToPath(new URL('../../dist/cli.js', import.meta.url));
 /** Params that let every stable code render fully in both locales. */
 const sampleParams: Record<OpenPdfErrorCode, OpenPdfErrorParams> = {
     'session/argument-invalid': { reason: 'page 999 is beyond the last page' },
-    'format/invalid': { format: 'PDF', reason: 'the xref table is damaged' },
-    'format/unsupported': { format: 'DOCX' },
+    'format/invalid': { reason: 'the xref table is damaged' },
+    'format/unsupported': { reason: 'the encrypted PDF stream is not supported' },
     'io/read': { path: 'input.pdf', kind: 'NotFound' },
     'io/write': { path: 'output.pdf' },
     'io/exists': { path: 'output.pdf' },
@@ -62,6 +62,24 @@ test('an unknown code keeps its machine code and falls back in both locales', ()
     assert.equal(zh, 'binding text');
     const error = new OpenPdfError('weird/code' as OpenPdfErrorCode, 'binding text');
     assert.equal(error.code, 'weird/code');
+    setErrorLocale('en');
+});
+
+test('machine branch and params stay stable while locale switches concurrently', async () => {
+    const code = 'io/read' as const;
+    const params = { path: 'input.pdf', kind: 'NotFound' };
+    const observed = await Promise.all(
+        Array.from({ length: 40 }, async (_unused, index) => {
+            await Promise.resolve();
+            setErrorLocale(index % 2 === 0 ? 'en-US' : 'zh-CN');
+            const error = new OpenPdfError(code, renderErrorCopy(code, params, 'binding text'), { params });
+            return { code: error.code, params: error.params };
+        }),
+    );
+    for (const result of observed) {
+        assert.equal(result.code, 'io/read', 'the machine code never depends on the locale');
+        assert.deepEqual(result.params, params, 'the machine params never depend on the locale');
+    }
     setErrorLocale('en');
 });
 

@@ -97,11 +97,58 @@ test('session/argument-invalid renders the typed `reason`', () => {
     assert.equal(error.message, 'the request was rejected: page range `999` is outside the 3-page document');
 });
 
-test('legacy `code: message` concatenation still decodes at the adapter entry', () => {
+test('a legacy `code: message` text is no longer decoded into a code', () => {
     process.env.OPEN_PDF_STUB = JSON.stringify({ message: 'format/unsupported: old binding text' });
     const error = capture();
-    assert.equal(error.code, 'format/unsupported');
-    assert.equal(error.message, 'old binding text');
+    assert.equal(error.code, 'binding/failure', 'the message is never parsed for a code');
+    assert.equal(error.message, 'format/unsupported: old binding text');
+});
+
+test('a payload with an extra key is withheld', () => {
+    process.env.OPEN_PDF_STUB = JSON.stringify({
+        message: 'disk said no',
+        code: 'io/exists',
+        detail: { params: { path: 'out.pdf', overwritten: true } },
+    });
+    const error = capture();
+    assert.equal(error.code, 'io/exists');
+    assert.deepEqual(error.params, {});
+    assert.equal(error.failure, undefined);
+    assert.equal(error.message, 'disk said no');
+});
+
+test('a payload missing a required key is withheld', () => {
+    process.env.OPEN_PDF_STUB = JSON.stringify({
+        message: 'disk said no',
+        code: 'io/read',
+        detail: { params: { path: 'input.pdf' } },
+    });
+    const error = capture();
+    assert.equal(error.code, 'io/read');
+    assert.deepEqual(error.params, {});
+    assert.equal(error.failure, undefined);
+});
+
+test('a payload with a mistyped key is withheld', () => {
+    process.env.OPEN_PDF_STUB = JSON.stringify({
+        message: 'disk said no',
+        code: 'io/read',
+        detail: { params: { path: 'input.pdf', kind: 7 } },
+    });
+    const error = capture();
+    assert.equal(error.code, 'io/read');
+    assert.deepEqual(error.params, {});
+    assert.equal(error.failure, undefined);
+});
+
+test('a valid payload exposes the machine branch next to the copy', () => {
+    process.env.OPEN_PDF_STUB = JSON.stringify({
+        message: 'REPLACED NATIVE TEXT',
+        code: 'io/exists',
+        detail: { params: { path: 'out.pdf' } },
+    });
+    const error = capture();
+    assert.deepEqual(error.failure, { code: 'io/exists', params: { path: 'out.pdf' } });
 });
 
 test('a failure without any code surfaces as binding/failure', () => {

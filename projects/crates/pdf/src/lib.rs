@@ -65,11 +65,27 @@ impl ServiceError {
     pub fn params(&self) -> &Value {
         &self.params
     }
+
+    /// Returns the code's frozen payload, refusing a payload that does not
+    /// match the shape declared for that code.
+    ///
+    /// Bindings forward this instead of the raw [`Self::params`] value, so a
+    /// missing, extra or mistyped key never reaches the SDK as a payload.
+    pub fn frozen_params(&self) -> Option<Value> {
+        document_pdf::ErrorParams::parse(self.code(), &self.params).ok().map(|params| params.to_json())
+    }
 }
 
 impl From<document_pdf::ServiceError> for ServiceError {
     fn from(error: document_pdf::ServiceError) -> Self {
-        Self::new(error.code(), error.message())
+        // Carry the engine's frozen payload through instead of dropping it and
+        // leaving the binding to guess parameters from the message.
+        let params = error.params().map(document_pdf::ErrorParams::to_json);
+        let mut lifted = Self::new(error.code(), error.message());
+        if let Some(params) = params {
+            lifted = lifted.with_params(params);
+        }
+        lifted
     }
 }
 
@@ -304,7 +320,10 @@ pub fn extract_images_pages(path: &Path, out_dir: &Path, ranges: &str) -> Result
         let outcome = (|| -> Result<Vec<ExtractedImage>, ServiceError> {
             arrange(path, &temporary, &request)?;
             let bytes = fs::read(&temporary).map_err(|error| {
-                ServiceError::new("io/read", format!("failed to read {}: {error}", temporary.display()))
+                ServiceError::new("io/read", format!("failed to read {}: {error}", temporary.display())).with_params(json!({
+                    "path": temporary.display().to_string(),
+                    "kind": format!("{:?}", error.kind()),
+                }))
             })?;
             Ok(extract_images_bytes(&bytes, out_dir, stem)?)
         })();
@@ -333,8 +352,10 @@ pub fn extract_images_pages(path: &Path, out_dir: &Path, ranges: &str) -> Result
         }
         image.page = source;
     }
-    serde_json::to_value(&images)
-        .map_err(|error| ServiceError::new("format/invalid", format!("the image report cannot be serialized: {error}")))
+    serde_json::to_value(&images).map_err(|error| {
+        let message = format!("the image report cannot be serialized: {error}");
+        ServiceError::new("format/invalid", message.clone()).with_params(json!({ "reason": message }))
+    })
 }
 
 /// Expands one-based ranges such as `1-3,5`, refusing pages the PDF cannot satisfy.
@@ -986,8 +1007,10 @@ pub fn extract_links(path: &Path) -> Result<Value, ServiceError> {
 /// do not resolve to a page of the document are skipped.
 pub fn list_destinations(path: &Path) -> Result<Value, ServiceError> {
     let destinations = document_pdf::list_destinations(path)?;
-    serde_json::to_value(destinations)
-        .map_err(|error| ServiceError::new("format/invalid", format!("the destination report cannot be serialized: {error}")))
+    serde_json::to_value(destinations).map_err(|error| {
+        let message = format!("the destination report cannot be serialized: {error}");
+        ServiceError::new("format/invalid", message.clone()).with_params(json!({ "reason": message }))
+    })
 }
 
 /// Interleaves the pages of two PDFs into one document.
