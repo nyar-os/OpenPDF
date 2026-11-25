@@ -51,8 +51,11 @@ export interface OpenPdfErrorDetails {
     readonly feature?: string;
 }
 
-/** Normalized parameters exposed on {@link OpenPdfError}. */
-export type OpenPdfErrorParams = Readonly<Record<string, unknown>>;
+/**
+ * Parameters exposed on {@link OpenPdfError}: one of the frozen per-code shapes,
+ * or an empty map when a payload was withheld.
+ */
+export type OpenPdfErrorParams = ErrorParamsByCode[OpenPdfErrorCode] | Readonly<Record<string, never>>;
 
 /** Options accepted by {@link OpenPdfError}. */
 export interface OpenPdfErrorOptions {
@@ -238,12 +241,13 @@ export function renderErrorCopy(code: string, params: OpenPdfErrorParams, fallba
         return fallback;
     }
     let complete = true;
+    const bag: Readonly<Record<string, unknown>> = params;
     const rendered = template.replace(/\{(\w+)\}/g, (match, key: string) => {
-        if (params[key] === undefined) {
+        if (bag[key] === undefined) {
             complete = false;
             return match;
         }
-        return String(params[key]);
+        return String(bag[key]);
     });
     return complete ? rendered : fallback;
 }
