@@ -10,10 +10,11 @@
 pub use document_pdf::{
     ArrangeReport, Bookmark, BookmarkReport, CreateReport, CreateRequest, DeletePagesReport, DocumentArrange, ExtractLoss,
     ExtractReport, ExtractedImage, FidelityCode, FidelityLoss, FormFillReport, FormValue, InspectReport, MergeReport,
-    MetadataPatch, PdfBookmark, PdfFormField, PdfMetadata, PdfPageSize, RotatePagesReport, SetMetadataReport, SetPageBoxesReport,
-    SplitPart, SplitReport, StampReport, StampRequest, arrange, create, delete_pages, extract_images, extract_images_bytes,
-    extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks, set_metadata,
-    set_page_boxes, split, split_every, stamp,
+    MetadataPatch, PageTextReplacement, PdfBookmark, PdfFormField, PdfMetadata, PdfPageSize, ReplaceTextRequest, RotatePagesReport,
+    SetMetadataReport, SetPageBoxesReport, SplitPart, SplitReport, StampReport, StampRequest, TextReplaceCode, TextReplaceLoss,
+    TextReplaceReport, arrange, create, delete_pages, extract_images, extract_images_bytes, extract_text, extract_text_bytes,
+    fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks, set_metadata, set_page_boxes, split, split_every,
+    stamp,
 };
 
 use std::{
@@ -919,6 +920,40 @@ pub fn stamp_page_numbers(
     }))
 }
 
+/// Replaces text inside the content streams of the selected pages.
+///
+/// `pages` accepts the same one-based ranges as [`reverse_pages`] and defaults
+/// to every page. Only a run the rewriter can address is changed: a string
+/// operand of `Tj`, `TJ`, `'` or `"` whose active font uses a standard
+/// single-byte encoding. Composite fonts, `/Differences` remaps, matches split
+/// across show operations and text drawn from a Form XObject are listed under
+/// `losses` with a stable code, so an untouched run is never silent. The output
+/// is replaced only when `overwrite` is true.
+pub fn replace_text(
+    path: &Path,
+    find: &str,
+    with: &str,
+    pages: Option<&str>,
+    out: &Path,
+    overwrite: bool,
+) -> Result<Value, ServiceError> {
+    let request = ReplaceTextRequest {
+        find: find.to_string(),
+        replace: with.to_string(),
+        pages: pages.map(str::to_string),
+    };
+    let report = document_pdf::replace_text(path, out, &request, overwrite)?;
+    Ok(json!({
+        "path": report.path,
+        "pages": report.pages,
+        "pagesChanged": report.pages_changed,
+        "replaced": report.replaced,
+        "replacements": report.replacements,
+        "losses": report.losses,
+        "bytes": report.bytes,
+    }))
+}
+
 /// Splits one PDF into consecutive files at its top-level bookmarks.
 ///
 /// The outline tree is read through `document.pdf`'s resolved outline report:
@@ -1142,6 +1177,7 @@ pub fn capabilities() -> serde_json::Value {
             "fillForm": "supported",
             "stamp": "supported",
             "stampPageNumbers": "supported",
+            "replaceText": "supported",
             "extractText": "partial",
             "extractTextPages": "supported",
             "search": "partial",

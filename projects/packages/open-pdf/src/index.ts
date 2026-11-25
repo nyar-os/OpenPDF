@@ -41,6 +41,7 @@ import type {
     PdfOutlineReport,
     PdfSearchReport,
     ReplacePagesReport,
+    ReplaceTextReport,
     ReversePagesReport,
     RotatePagesReport,
     SetMetadataReport,
@@ -336,6 +337,24 @@ export class OpenPDF {
     }
 
     /**
+     * Replaces text inside the content streams of the selected pages.
+     *
+     * `options.pages` is a one-based selection such as `1-3,5`; every page when
+     * omitted. Only a run addressed by a standard single-byte font encoding is
+     * rewritten; composite fonts, `/Differences` remaps, matches split across
+     * show operations and text drawn from a Form XObject are reported under
+     * `losses` with a stable code, never dropped silently.
+     */
+    async replaceText(
+        path: string,
+        find: string,
+        withText: string,
+        options: { readonly pages?: string; readonly out: string; readonly overwrite?: boolean },
+    ): Promise<ReplaceTextReport> {
+        return service.replaceText(path, find, withText, options.pages, options.out, options.overwrite ?? this.defaultOverwrite);
+    }
+
+    /**
      * Extracts text from content streams decoded through their filters.
      *
      * `options.pages` is a one-based selection such as `1-3,5`; selected pages
@@ -621,6 +640,16 @@ export class OpenPDF {
         overwrite = false,
     ): StampPageNumbersReport {
         return service.stampPageNumbers(path, pages, start, format, position, out, overwrite);
+    }
+
+    /** Replaces text inside the selected pages' content streams into a new PDF. */
+    static replaceText(
+        path: string,
+        find: string,
+        withText: string,
+        options: { readonly pages?: string; readonly out: string; readonly overwrite?: boolean },
+    ): ReplaceTextReport {
+        return service.replaceText(path, find, withText, options.pages, options.out, options.overwrite ?? false);
     }
 
     /**

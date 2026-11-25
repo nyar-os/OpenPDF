@@ -646,6 +646,27 @@ fn pdf_interleave_pages(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Replaces text inside the content streams of the selected pages.
+#[function]
+fn pdf_replace_text(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let find = text(&ctx, 1)?;
+    let with = text(&ctx, 2)?;
+    let pages = optional_text(&ctx, 3)?;
+    let out = text(&ctx, 4)?;
+    let overwrite = ctx.args().get(5).map(|value| value.as_bool()).transpose()?.unwrap_or(false);
+    let report = open_pdf_core::replace_text(
+        std::path::Path::new(&path),
+        &find,
+        &with,
+        pages.as_deref(),
+        std::path::Path::new(&out),
+        overwrite,
+    )
+    .map_err(failure)?;
+    respond(&ctx, &report)
+}
+
 register_module![
     version,
     capabilities,
@@ -686,5 +707,6 @@ register_module![
     pdf_stamp_page_numbers,
     pdf_extract_links,
     pdf_list_destinations,
-    pdf_interleave_pages
+    pdf_interleave_pages,
+    pdf_replace_text
 ];

@@ -41,6 +41,7 @@ import type {
     PdfOutlineReport,
     PdfSearchReport,
     ReplacePagesReport,
+    ReplaceTextReport,
     ReversePagesReport,
     RotatePagesReport,
     SetMetadataReport,
@@ -513,6 +514,26 @@ export function stampPageNumbers(
 ): StampPageNumbersReport {
     return decode<StampPageNumbersReport>(() =>
         binding('stampPageNumbers').pdf_stamp_page_numbers(path, pages, start, format ?? '', position ?? '', out, overwrite),
+    );
+}
+
+/**
+ * Replaces text inside the content streams of the selected pages.
+ *
+ * `pages` is a one-based selection such as `1-3,5`; every page when omitted.
+ * Only runs the rewriter can address are changed; everything else is reported
+ * under `losses` with a stable code.
+ */
+export function replaceText(
+    path: string,
+    find: string,
+    withText: string,
+    pages: string | undefined,
+    out: string,
+    overwrite = false,
+): ReplaceTextReport {
+    return decode<ReplaceTextReport>(() =>
+        binding('replaceText').pdf_replace_text(path, find, withText, pages ?? null, out, overwrite),
     );
 }
 

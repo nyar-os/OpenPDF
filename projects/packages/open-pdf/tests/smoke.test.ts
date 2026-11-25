@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -74,6 +74,7 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.fillForm('input.pdf', 'out.pdf', { name: 'x' }),
         () => OpenPDF.create({ out: 'new.pdf', pages: ['hello'] }),
         () => OpenPDF.extractText('input.pdf'),
+        () => OpenPDF.replaceText('input.pdf', 'draft', 'final', { out: 'out.pdf' }),
         () => OpenPDF.extractImages('input.pdf', 'images'),
         () => OpenPDF.listDestinations('input.pdf'),
     ];
@@ -181,6 +182,45 @@ test('replacePages splices the other document into the selection', { skip: witho
         assert.deepEqual(report.replaced, [2]);
         assert.equal(report.replacementPages, 1);
         assert.equal(OpenPDF.inspect(out).pages, 3);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('replaceText rewrites the selection and reports what it could not address', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'draft.pdf');
+        const out = path.join(dir, 'clean.pdf');
+        await OpenPDF.create({ out: source, pages: ['DRAFT copy', 'DRAFT copy'], overwrite: true });
+        const report = await OpenPDF.replaceText(source, 'DRAFT ', '', { pages: '2', out });
+        assert.equal(report.pages, 2);
+        assert.equal(report.pagesChanged, 1);
+        assert.equal(report.replaced, 1);
+        assert.deepEqual(report.replacements, [{ page: 2, replaced: 1 }]);
+        assert.deepEqual(report.losses, []);
+        assert.ok(report.bytes > 0);
+        assert.match(OpenPDF.extractText(out).markdown, /DRAFT copy/);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('replaceText rejects an empty search text before touching the output', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'draft.pdf');
+        const out = path.join(dir, 'never.pdf');
+        await OpenPDF.create({ out: source, pages: ['One'], overwrite: true });
+        assert.throws(
+            () => OpenPDF.replaceText(source, '', 'x', { out }),
+            (error: unknown) => {
+                assert.ok(error instanceof OpenPdfError);
+                assert.equal(error.code, 'session/argument-invalid');
+                return true;
+            },
+        );
+        assert.equal(existsSync(out), false);
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

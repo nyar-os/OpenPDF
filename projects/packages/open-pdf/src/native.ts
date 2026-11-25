@@ -96,6 +96,14 @@ export interface NativeBinding {
     pdf_extract_links(path: string): string;
     pdf_list_destinations(path: string): string;
     pdf_interleave_pages(first: string, second: string, out: string, overwrite: boolean): string;
+    pdf_replace_text(
+        path: string,
+        find: string,
+        withText: string,
+        pages: string | null,
+        out: string,
+        overwrite: boolean,
+    ): string;
 }
 
 let cached: NativeBinding | null | undefined;

@@ -1261,6 +1261,49 @@ cli
     });
 
 cli
+    .command('replace-text', 'cli.cmd.replace-text')
+    .option('--pages <ranges>', 'cli.opt.pages')
+    .option('-o, --out <file>', 'cli.opt.out')
+    .option('--overwrite', 'cli.opt.overwrite')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        const find = options._?.[1];
+        const withText = options._?.[2] ?? '';
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        if (find === undefined || find.length === 0) {
+            ctx.fail('open-pdf.cli.replace-args', { message: 'a non-empty search text is required' });
+            return 2;
+        }
+        const out = text(options, 'out');
+        if (out === undefined) {
+            ctx.fail('open-pdf.cli.out-required', { message: '`--out <file>` is required' });
+            return 2;
+        }
+        const pages = pageRanges(options, 'pages');
+        if (pages === null) {
+            ctx.fail('open-pdf.cli.replace-args', { message: '`--pages` must be 1-based ranges such as 1-3,5' });
+            return 2;
+        }
+        const report = await sdk(ctx, (pdf) => pdf.replaceText(file, find, withText, {
+            pages: pages ?? undefined,
+            out,
+            overwrite: flag(options, 'overwrite'),
+        }));
+        const lines = report.losses.map((loss) => `page ${loss.page}: ${loss.code} — ${loss.message}`);
+        ctx.emitResult(
+            report,
+            [
+                `replaced ${report.replaced} occurrence(s) on ${report.pagesChanged} page(s) in ${report.path}`,
+                ...lines,
+            ].join('\n'),
+        );
+        return 0;
+    });
+
+cli
     .command('search', 'cli.cmd.search')
     .option('--limit <n>', 'cli.opt.limit')
     .option('--pages <ranges>', 'cli.opt.pages')

@@ -51,6 +51,24 @@ test('`--json` success path emits the cli-result/v0 envelope', { skip: !installe
     assert.ok(data.bytes > 0);
 });
 
+test('`replace-text` rewrites the selection and rejects an empty search text', { skip: !installed }, (t) => {
+    const dir = scratchDir();
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    runCli(['create', '-o', 'src.pdf', '--page', 'DRAFT one', '--page', 'DRAFT two', '--json'], dir);
+    const run = runCli(['replace-text', 'src.pdf', 'DRAFT ', '-o', 'clean.pdf', '--json'], dir);
+    assert.equal(run.status, 0);
+    assert.equal(run.envelope.ok, true);
+    const data = run.envelope.data as { replaced: number; pagesChanged: number; losses: unknown[] };
+    assert.equal(data.replaced, 2);
+    assert.equal(data.pagesChanged, 2);
+    assert.deepEqual(data.losses, []);
+
+    const empty = runCli(['replace-text', 'src.pdf', '', '-o', 'never.pdf', '--json'], dir);
+    assert.equal(empty.status, 1);
+    assert.equal(empty.envelope.error?.code, 'open-pdf.cli.replace-args');
+    assert.equal(fs.existsSync(path.join(dir, 'never.pdf')), false);
+});
+
 test('a missing file relays the stable `io/read` code', { skip: !installed }, (t) => {
     const dir = scratchDir();
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

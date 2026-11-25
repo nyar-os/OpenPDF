@@ -181,6 +181,7 @@ export interface PdfCapabilities {
         readonly fillForm: SupportLevel;
         readonly stamp: SupportLevel;
         readonly stampPageNumbers: SupportLevel;
+        readonly replaceText: SupportLevel;
         readonly extractText: SupportLevel;
         readonly extractTextPages: SupportLevel;
         readonly search: SupportLevel;
@@ -610,6 +611,49 @@ export interface StampPageNumbersReport {
     readonly format: string;
     /** Stamp position: `center`, `top` or `bottom`. */
     readonly position: string;
+}
+
+/** One page that received at least one text replacement. */
+export interface PageTextReplacement {
+    /** One-based page number. */
+    readonly page: number;
+    /** Occurrences rewritten on that page. */
+    readonly replaced: number;
+}
+
+/** Stable reason a text run or page was left untouched. */
+export type TextReplaceCode =
+    | 'content-filter-unsupported'
+    | 'content-filter-invalid'
+    | 'content-stream-unreadable'
+    | 'font-encoding-unsupported'
+    | 'text-encoding-unsupported'
+    | 'text-split-across-runs'
+    | 'text-in-form-xobject';
+
+/** One run or page the rewriter could not address. */
+export interface TextReplaceLoss {
+    /** One-based page number. */
+    readonly page: number;
+    readonly code: TextReplaceCode;
+    /** Human-readable explanation; the code is the contract. */
+    readonly message: string;
+}
+
+/** Result of `replaceText()`. */
+export interface ReplaceTextReport {
+    readonly path: string;
+    /** Pages written to the output. */
+    readonly pages: number;
+    /** Pages that received at least one replacement. */
+    readonly pagesChanged: number;
+    /** Occurrences rewritten across the document. */
+    readonly replaced: number;
+    /** Per-page counts, changed pages only, in page order. */
+    readonly replacements: readonly PageTextReplacement[];
+    /** Everything the rewrite could not touch, never silent. */
+    readonly losses: readonly TextReplaceLoss[];
+    readonly bytes: number;
 }
 
 /** Result of `create()`. */

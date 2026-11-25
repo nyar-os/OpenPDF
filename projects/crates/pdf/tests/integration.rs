@@ -13,7 +13,8 @@ use open_pdf_core::{
     inspect_bytes,
     insert_blank_pages, insert_pages, interleave_pages,
     list_destinations,
-    merge, merge_selected, metadata, move_pages, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages,
+    merge, merge_selected, metadata, move_pages, outline, replace_pages, replace_text, reverse_pages, rotate_pages, search,
+    search_pages,
     set_bookmarks,
     set_metadata,
     split_parts,
@@ -1834,6 +1835,52 @@ fn stamp_page_numbers_validates_start_format_position_and_overwrite() {
     assert!(!extracted.markdown.contains("Page 6"), "{:?}", extracted.markdown);
 
     assert_invalid(stamp_page_numbers(&path, "1", 1, None, None, &out, false), "io/exists");
+}
+
+#[test]
+fn replace_text_rewrites_selected_pages_and_reports_the_rest() {
+    let workspace = Workspace::new();
+    let path = workspace.create("draft.pdf", None, &["DRAFT copy", "DRAFT copy"]);
+    let out = workspace.path("clean.pdf");
+
+    let report = replace_text(&path, "DRAFT ", "", Some("2"), &out, false).expect("replace text");
+    assert_eq!(report["path"], json!(out.display().to_string()));
+    assert_eq!(report["pages"], json!(2));
+    assert_eq!(report["pagesChanged"], json!(1));
+    assert_eq!(report["replaced"], json!(1));
+    assert_eq!(report["replacements"], json!([{ "page": 2, "replaced": 1 }]));
+    assert_eq!(report["losses"], json!([]));
+    assert!(report["bytes"].as_u64().unwrap_or_default() > 0);
+
+    let extracted = extract_text(&out).expect("extract rewritten");
+    assert!(extracted.markdown.contains("DRAFT copy"), "page one keeps its run: {:?}", extracted.markdown);
+    assert!(extracted.markdown.contains("copy"), "page two was rewritten: {:?}", extracted.markdown);
+    assert_eq!(extracted.markdown.matches("DRAFT").count(), 1, "{:?}", extracted.markdown);
+}
+
+#[test]
+fn replace_text_reports_unaddressable_runs_and_guards_the_output() {
+    let workspace = Workspace::new();
+    let path = workspace.write(
+        "type0.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+            "<< /Length 38 >>\nstream\nBT /F1 12 Tf 20 40 Td (Hello) Tj ET\nendstream",
+            "<< /Type /Font /Subtype /Type0 /BaseFont /Noto /Encoding /Identity-H /DescendantFonts [] >>",
+        ]),
+    );
+    let out = workspace.path("type0-out.pdf");
+
+    let report = replace_text(&path, "Hello", "World", None, &out, false).expect("replace text");
+    assert_eq!(report["replaced"], json!(0));
+    assert_eq!(report["losses"][0]["code"], json!("font-encoding-unsupported"));
+
+    assert_invalid(replace_text(&path, "", "x", None, &workspace.path("a.pdf"), true), "session/argument-invalid");
+    assert_invalid(replace_text(&path, "Hello", "世", None, &workspace.path("b.pdf"), true), "session/argument-invalid");
+    assert_invalid(replace_text(&path, "Hello", "World", Some("0"), &workspace.path("c.pdf"), true), "session/argument-invalid");
+    assert_invalid(replace_text(&path, "Hello", "World", None, &out, false), "io/exists");
 }
 
 #[test]

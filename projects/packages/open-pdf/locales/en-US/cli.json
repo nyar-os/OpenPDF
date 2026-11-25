@@ -30,6 +30,7 @@
             "create": "Create a PDF with styled text pages",
             "stamp": "Paint a text watermark, header or footer onto selected pages",
             "stamp-page-numbers": "Stamp sequential page numbers onto selected pages",
+            "replace-text": "Replace text inside content streams and list every run left untouched",
             "extract-text": "Extract text from content streams, including compressed ones",
             "search": "Search extracted text line by line",
             "extract-images": "Write embedded JPEG and PNG-encodable images to a directory",
