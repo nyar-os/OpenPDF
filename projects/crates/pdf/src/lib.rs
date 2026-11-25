@@ -750,13 +750,9 @@ pub fn reverse_pages(
         Some(ranges) => parse_page_ranges(ranges, total)?,
         None => (1..=total).collect(),
     };
-    let mut order: Vec<usize> = (1..=total).collect();
-    let flipped = reversed.iter().rev().copied().collect::<Vec<_>>();
-    for (position, page) in reversed.iter().enumerate() {
-        order[page - 1] = flipped[position];
-    }
-    let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
-    let arranged = document_pdf::arrange(path, out, &request)?;
+    // Upstream owns the flip permutation, so no local order vector and
+    // arrange round trip is needed here.
+    let arranged = document_pdf::reverse_pages(path, Some(&reversed), out, overwrite)?;
     Ok(json!({
         "path": arranged.path,
         "pages": arranged.pages,
@@ -775,15 +771,6 @@ pub fn reverse_pages(
 pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: bool) -> Result<serde_json::Value, ServiceError> {
     let total = document_pdf::inspect(path)?.pages;
     let selected = parse_page_ranges(pages, total)?;
-    if after as usize > total {
-        return Err(invalid_pages_with(format!("page {after} is outside the {total}-page document"), json!({ "arg": "after" })));
-    }
-    if after != 0 && selected.contains(&(after as usize)) {
-        return Err(invalid_pages_with(
-            format!("page {after} is part of the selection being moved"),
-            json!({ "arg": "after", "pages": pages }),
-        ));
-    }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
@@ -791,23 +778,10 @@ pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: b
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    let mut order: Vec<usize> = (1..=total).filter(|page| !selected.contains(page)).collect();
-    let position = if after == 0 {
-        0
-    }
-    else {
-        let anchor = after as usize;
-        order
-            .iter()
-            .position(|page| *page == anchor)
-            .map(|index| index + 1)
-            .ok_or_else(|| {
-                invalid_pages_with(format!("page {after} is outside the {total}-page document"), json!({ "arg": "after" }))
-            })?
-    };
-    order.splice(position..position, selected.iter().copied());
-    let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
-    let arranged = document_pdf::arrange(path, out, &request)?;
+    // Upstream owns the anchor rules and the relocation permutation; the
+    // product only re-attaches the rejected argument to the typed failure.
+    let arranged = document_pdf::move_pages(path, &selected, after as usize, out, overwrite)
+        .map_err(|error| annotate_argument(error, json!({ "arg": "after", "pages": pages })))?;
     Ok(json!({
         "path": arranged.path,
         "pages": arranged.pages,
@@ -828,15 +802,6 @@ pub fn swap_pages(path: &Path, pages: &str, with: &str, out: &Path, overwrite: b
     let total = document_pdf::inspect(path)?.pages;
     let left = parse_page_ranges(pages, total)?;
     let right = parse_page_ranges(with, total)?;
-    if left.len() != right.len() {
-        return Err(invalid_pages_with(
-            format!("`pages` and `with` must select the same number of pages, got {} and {}", left.len(), right.len()),
-            json!({ "pages": pages, "with": with }),
-        ));
-    }
-    if left.iter().any(|page| right.contains(page)) {
-        return Err(invalid_pages_with("`pages` and `with` must not share a page", json!({ "pages": pages, "with": with })));
-    }
     if out.exists() && !overwrite {
         return Err(ServiceError::new(
             "io/exists",
@@ -844,12 +809,10 @@ pub fn swap_pages(path: &Path, pages: &str, with: &str, out: &Path, overwrite: b
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    let mut order: Vec<usize> = (1..=total).collect();
-    for (source, target) in left.iter().zip(&right) {
-        order.swap(source - 1, target - 1);
-    }
-    let request = DocumentArrange { order: Some(order), rotate: None, remove: None };
-    let arranged = document_pdf::arrange(path, out, &request)?;
+    // Upstream owns the pairing rules and the swap permutation; the product
+    // only re-attaches the rejected selections to the typed failure.
+    let arranged = document_pdf::swap_pages(path, &left, &right, out, overwrite)
+        .map_err(|error| annotate_argument(error, json!({ "pages": pages, "with": with })))?;
     Ok(json!({
         "path": arranged.path,
         "pages": arranged.pages,
@@ -1136,6 +1099,15 @@ fn invalid_pages_with(message: impl Into<String>, extra: Value) -> ServiceError 
         params.extend(extra);
     }
     ServiceError::new("session/argument-invalid", message).with_params(Value::Object(params))
+}
+
+/// Re-attaches typed product params to an upstream argument failure, keeping
+/// every other upstream code on its plain product mapping.
+fn annotate_argument(error: document_pdf::ServiceError, extra: Value) -> ServiceError {
+    if error.code() == "session/argument-invalid" {
+        return invalid_pages_with(error.message(), extra);
+    }
+    error.into()
 }
 
 fn temporary_path() -> PathBuf {
