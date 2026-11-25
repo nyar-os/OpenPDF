@@ -86,6 +86,26 @@ export interface ExtractLinksReport {
     }[];
 }
 
+/** One named destination resolved to a page of its document. */
+export interface NamedDestination {
+    /** Destination name as spelled in the name tree. */
+    readonly name: string;
+    /** 1-based page the destination points at. */
+    readonly page: number;
+}
+
+/**
+ * Result of `listDestinations()`.
+ *
+ * The native binding returns a bare `[{name, page}]` array; the service wraps
+ * it into this report so the author surface matches `ExtractLinksReport`.
+ */
+export interface ListDestinationsReport {
+    /** Number of named destinations resolved to pages of the document. */
+    readonly count: number;
+    readonly destinations: readonly NamedDestination[];
+}
+
 /** Result of `inspect()`. */
 export interface PdfInspectReport {
     readonly label: string;
@@ -167,6 +187,7 @@ export interface PdfCapabilities {
         readonly extractImages: SupportLevel;
         readonly extractImagesPages: SupportLevel;
         readonly extractLinks: SupportLevel;
+        readonly listDestinations: SupportLevel;
     };
     readonly checks: {
         readonly metadata: SupportLevel;

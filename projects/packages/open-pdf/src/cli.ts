@@ -1416,6 +1416,24 @@ cli
         return 0;
     });
 
+cli
+    .command('list-destinations', 'cli.cmd.list-destinations')
+    .actionCtx(async (options, _args, ctx) => {
+        const file = input(options);
+        if (file === undefined) {
+            ctx.fail('open-pdf.cli.file-required', { message: 'a PDF file is required' });
+            return 2;
+        }
+        const report = await sdk(ctx, (pdf) => pdf.listDestinations(file));
+        const human = report.count === 0
+            ? '(no destinations found)'
+            : report.destinations
+                  .map((destination) => `${destination.name} -> page ${destination.page}`)
+                  .join('\n');
+        ctx.emitResult(report, human);
+        return 0;
+    });
+
 const entry = process.argv[1];
 if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
     const code = await cli.parse(process.argv);

@@ -36,10 +36,12 @@ import type {
     InsertPagesReport,
     InterleavePagesReport,
     KeepPagesReport,
+    ListDestinationsReport,
     MergeOptions,
     MergeReport,
     MetadataPatch,
     MovePagesReport,
+    NamedDestination,
     PdfCapabilities,
     PdfInspectReport,
     PdfMetadataReport,
@@ -129,6 +131,17 @@ export function capabilities(): PdfCapabilities {
  */
 export function extractLinks(path: string): ExtractLinksReport {
     return decode<ExtractLinksReport>(() => binding('extractLinks').pdf_extract_links(path));
+}
+
+/**
+ * Lists the named destinations one PDF resolves to pages of itself.
+ *
+ * The binding answers a bare `[{name, page}]` array with 1-based pages; this
+ * layer wraps it into a report whose shape mirrors `extractLinks`.
+ */
+export function listDestinations(path: string): ListDestinationsReport {
+    const destinations = decode<NamedDestination[]>(() => binding('listDestinations').pdf_list_destinations(path));
+    return { count: destinations.length, destinations };
 }
 
 /** Reads version, pages, metadata, page sizes and outlines from one PDF. */

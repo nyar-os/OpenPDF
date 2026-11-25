@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -75,6 +75,7 @@ test('without an installed addon every engine call reports capability/not-implem
         () => OpenPDF.create({ out: 'new.pdf', pages: ['hello'] }),
         () => OpenPDF.extractText('input.pdf'),
         () => OpenPDF.extractImages('input.pdf', 'images'),
+        () => OpenPDF.listDestinations('input.pdf'),
     ];
     for (const call of calls) {
         assert.throws(call, (error: unknown) => {
@@ -321,6 +322,56 @@ test('outline drops entries deeper than the requested depth', { skip: withoutAdd
         assert.equal(shallow.maxDepth, 1);
         assert.deepEqual(shallow.bookmarks.map((bookmark) => bookmark.title), ['Top']);
         assert.throws(() => OpenPDF.outline(out, { depth: 0 }), RangeError);
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+/** Mirrors the Rust `assemble` helper: sequential objects plus a classic xref. */
+function assemblePdf(objects: string[]): Buffer {
+    let output = '%PDF-1.7\n';
+    const offsets: number[] = [];
+    objects.forEach((body, index) => {
+        offsets.push(Buffer.byteLength(output, 'latin1'));
+        output += `${index + 1} 0 obj\n${body}\nendobj\n`;
+    });
+    const xref = Buffer.byteLength(output, 'latin1');
+    output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (const offset of offsets) {
+        output += `${String(offset).padStart(10, '0')} 00000 n \n`;
+    }
+    output += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return Buffer.from(output, 'latin1');
+}
+
+test('listDestinations wraps the named-destination array into a report', { skip: withoutAddon }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'open-pdf-'));
+    try {
+        const source = path.join(dir, 'source.pdf');
+        await OpenPDF.create({ out: source, pages: ['One', 'Two'], overwrite: true });
+        const empty = OpenPDF.listDestinations(source);
+        assert.equal(empty.count, 0);
+        assert.deepEqual(empty.destinations, []);
+
+        const dests = path.join(dir, 'dests.pdf');
+        writeFileSync(dests, assemblePdf([
+            '<< /Type /Catalog /Pages 2 0 R /Dests 5 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>',
+            '<< /Names [ (Intro) [3 0 R /Fit] (ChapterTwo) 4 0 R (Ghost) 9 0 R ] >>',
+        ]));
+        const report = OpenPDF.listDestinations(dests);
+        assert.equal(report.count, 2);
+        assert.deepEqual(report.destinations, [
+            { name: 'ChapterTwo', page: 2 },
+            { name: 'Intro', page: 1 },
+        ]);
+
+        assert.throws(
+            () => OpenPDF.listDestinations(path.join(dir, 'absent.pdf')),
+            (error: unknown) => error instanceof OpenPdfError && error.code === 'io/read',
+        );
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

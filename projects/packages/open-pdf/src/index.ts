@@ -30,6 +30,7 @@ import type {
     InsertPagesReport,
     InterleavePagesReport,
     KeepPagesReport,
+    ListDestinationsReport,
     MergeOptions,
     MergeReport,
     MetadataPatch,
@@ -86,6 +87,11 @@ export class OpenPDF {
     /** Lists every link annotation one PDF carries. */
     async extractLinks(path: string): Promise<ExtractLinksReport> {
         return service.extractLinks(path);
+    }
+
+    /** Lists the named destinations one PDF resolves to pages of itself. */
+    async listDestinations(path: string): Promise<ListDestinationsReport> {
+        return service.listDestinations(path);
     }
 
     /** Reads version, pages, metadata, page sizes and outlines from one PDF. */
@@ -396,6 +402,11 @@ export class OpenPDF {
     /** Lists every link annotation one PDF carries. */
     static extractLinks(path: string): ExtractLinksReport {
         return service.extractLinks(path);
+    }
+
+    /** Lists the named destinations one PDF resolves to pages of itself. */
+    static listDestinations(path: string): ListDestinationsReport {
+        return service.listDestinations(path);
     }
 
     /** Reads version, pages, metadata, page sizes and outlines from one PDF. */

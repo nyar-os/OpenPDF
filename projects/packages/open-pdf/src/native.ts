@@ -94,6 +94,7 @@ export interface NativeBinding {
         overwrite: boolean,
     ): string;
     pdf_extract_links(path: string): string;
+    pdf_list_destinations(path: string): string;
     pdf_interleave_pages(first: string, second: string, out: string, overwrite: boolean): string;
 }
 
