@@ -47,7 +47,7 @@ export class OpenPdfError extends Error {
     readonly recoverable: boolean;
     /** Optional locators. */
     readonly details: OpenPdfErrorDetails;
-    /** Typed parameters of the code; empty until the upstream error model carries them. */
+    /** Typed parameters of the code, as delivered by the binding contract. */
     readonly params: OpenPdfErrorParams;
 
     constructor(code: OpenPdfErrorCode, message: string, options: OpenPdfErrorOptions = {}) {
@@ -76,10 +76,12 @@ export function isOpenPdfError(value: unknown): value is OpenPdfError {
 /**
  * Product copy for each stable code.
  *
- * The upstream `document-pdf` error model still carries only `code` and
- * `message`, so these templates have no placeholders to fill and every render
- * falls back to the binding's own text; the machine-readable `code` is what the
- * contract guarantees, and it never depends on locale.
+ * Failures built by the product surface carry machine-readable `params`
+ * (`io/exists` names the blocked `path`; `session/argument-invalid` names the
+ * `reason`, plus `pages` or `arg` for the rejected selection), so these
+ * templates render localized copy from them. Failures without params — text
+ * produced upstream — keep the binding's own text; the machine-readable `code`
+ * is what the contract guarantees, and it never depends on locale.
  */
 const messageCatalog: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     en: {

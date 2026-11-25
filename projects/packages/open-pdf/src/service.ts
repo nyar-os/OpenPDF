@@ -337,31 +337,37 @@ export function swapPages(
 export function expandPageList(spec: string, total: number): number[] {
     const parts = spec.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
     if (parts.length === 0) {
-        throw new OpenPdfError('session/argument-invalid', '`pages` must list 1-based pages such as `1-3,5`', {
+        const reason = '`pages` must list 1-based pages such as `1-3,5`';
+        throw new OpenPdfError('session/argument-invalid', reason, {
             details: { feature: 'keepPages' },
+            params: { reason, pages: spec },
         });
     }
     const selected = new Set<number>();
     for (const part of parts) {
         const bounds = part.split('-');
         if (bounds.length > 2 || !bounds.every((bound) => /^\d+$/.test(bound))) {
-            throw new OpenPdfError('session/argument-invalid', `\`${part}\` is not a page number or range`, {
+            const reason = `\`${part}\` is not a page number or range`;
+            throw new OpenPdfError('session/argument-invalid', reason, {
                 details: { feature: 'keepPages' },
+                params: { reason, pages: spec },
             });
         }
         const start = Number(bounds[0]);
         const end = bounds.length === 1 ? start : Number(bounds[1]);
         if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) {
-            throw new OpenPdfError('session/argument-invalid', `\`${part}\` is not a 1-based page range`, {
+            const reason = `\`${part}\` is not a 1-based page range`;
+            throw new OpenPdfError('session/argument-invalid', reason, {
                 details: { feature: 'keepPages' },
+                params: { reason, pages: spec },
             });
         }
         if (end > total) {
-            throw new OpenPdfError(
-                'session/argument-invalid',
-                `\`${part}\` reaches past the document's ${total} pages`,
-                { details: { feature: 'keepPages' } },
-            );
+            const reason = `\`${part}\` reaches past the document's ${total} pages`;
+            throw new OpenPdfError('session/argument-invalid', reason, {
+                details: { feature: 'keepPages' },
+                params: { reason, pages: spec },
+            });
         }
         for (let page = start; page <= end; page += 1) {
             selected.add(page);
@@ -395,6 +401,7 @@ export function keepPages(path: string, pages: string, out: string, overwrite = 
         if (!overwrite && existsSync(out)) {
             throw new OpenPdfError('io/exists', `${out} already exists; pass overwrite to replace it`, {
                 details: { feature: 'keepPages', path: out },
+                params: { path: out },
             });
         }
         copyFileSync(path, out);

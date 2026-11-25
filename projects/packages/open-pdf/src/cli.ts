@@ -50,6 +50,8 @@ async function sdk<T>(ctx: CommandContext, work: (pdf: OpenPDF) => Promise<T> | 
         return await work(session(ctx));
     } catch (error) {
         if (isOpenPdfError(error)) {
+            // The envelope relays the SDK-rendered copy through `{message}`, so the
+            // typed params reach the CLI inside `error.message` itself.
             throw CliError.from(error, error.code);
         }
         throw error;
