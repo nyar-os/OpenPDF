@@ -950,6 +950,7 @@ pub fn replace_text(
         "replaced": report.replaced,
         "replacements": report.replacements,
         "losses": report.losses,
+        "fidelity": report.fidelity,
         "bytes": report.bytes,
     }))
 }

@@ -199,6 +199,7 @@ test('replaceText rewrites the selection and reports what it could not address',
         assert.equal(report.replaced, 1);
         assert.deepEqual(report.replacements, [{ page: 2, replaced: 1 }]);
         assert.deepEqual(report.losses, []);
+        assert.deepEqual(report.fidelity, []);
         assert.ok(report.bytes > 0);
         assert.match(OpenPDF.extractText(out).markdown, /DRAFT copy/);
     } finally {

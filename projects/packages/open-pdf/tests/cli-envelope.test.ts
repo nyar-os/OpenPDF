@@ -58,10 +58,11 @@ test('`replace-text` rewrites the selection and rejects an empty search text', {
     const run = runCli(['replace-text', 'src.pdf', 'DRAFT ', '-o', 'clean.pdf', '--json'], dir);
     assert.equal(run.status, 0);
     assert.equal(run.envelope.ok, true);
-    const data = run.envelope.data as { replaced: number; pagesChanged: number; losses: unknown[] };
+    const data = run.envelope.data as { replaced: number; pagesChanged: number; losses: unknown[]; fidelity: unknown[] };
     assert.equal(data.replaced, 2);
     assert.equal(data.pagesChanged, 2);
     assert.deepEqual(data.losses, []);
+    assert.deepEqual(data.fidelity, []);
 
     const empty = runCli(['replace-text', 'src.pdf', '', '-o', 'never.pdf', '--json'], dir);
     assert.equal(empty.status, 1);

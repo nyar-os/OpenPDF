@@ -653,6 +653,8 @@ export interface ReplaceTextReport {
     readonly replacements: readonly PageTextReplacement[];
     /** Everything the rewrite could not touch, never silent. */
     readonly losses: readonly TextReplaceLoss[];
+    /** Catalog entries the rebuilt document does not carry, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
     readonly bytes: number;
 }
 

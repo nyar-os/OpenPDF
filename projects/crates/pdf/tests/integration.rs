@@ -1850,6 +1850,7 @@ fn replace_text_rewrites_selected_pages_and_reports_the_rest() {
     assert_eq!(report["replaced"], json!(1));
     assert_eq!(report["replacements"], json!([{ "page": 2, "replaced": 1 }]));
     assert_eq!(report["losses"], json!([]));
+    assert_eq!(report["fidelity"], json!([]));
     assert!(report["bytes"].as_u64().unwrap_or_default() > 0);
 
     let extracted = extract_text(&out).expect("extract rewritten");
