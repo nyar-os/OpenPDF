@@ -11,6 +11,7 @@ use open_pdf_core::{
     extract_images, extract_images_pages, extract_links, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect,
     inspect_bytes,
     insert_blank_pages, insert_pages, interleave_pages,
+    list_destinations,
     merge, merge_selected, metadata, move_pages, outline, replace_pages, reverse_pages, rotate_pages, search, search_pages,
     set_bookmarks,
     set_metadata,
@@ -455,6 +456,56 @@ fn extract_links_skips_other_annotations_and_unresolvable_targets() {
 
     let broken = workspace.write("broken.pdf", b"not a pdf");
     assert_invalid(extract_links(&broken), "format/invalid");
+}
+
+#[test]
+fn list_destinations_reports_named_pages_from_both_name_tree_forms() {
+    let workspace = Workspace::new();
+    let direct = workspace.write(
+        "dests.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R /Dests 5 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>",
+            "<< /Names [ (Intro) [3 0 R /Fit] (ChapterTwo) 4 0 R (Ghost) 9 0 R ] >>",
+        ]),
+    );
+
+    let report = list_destinations(&direct).expect("list destinations");
+    let entries = report.as_array().expect("destination array");
+    assert_eq!(entries.len(), 2, "{report}");
+    assert_eq!(entries[0]["name"], json!("ChapterTwo"));
+    assert_eq!(entries[0]["page"], json!(2));
+    assert_eq!(entries[1]["name"], json!("Intro"));
+    assert_eq!(entries[1]["page"], json!(1));
+
+    let classic = workspace.write(
+        "classic.pdf",
+        &assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R /Names << /Dests 5 0 R >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>",
+            "<< /Limits [ (A) (Z) ] >>",
+            "<< /Names [ (Appendix) [3 0 R /XYZ null null null] ] >>",
+        ]),
+    );
+    let report = list_destinations(&classic).expect("list classic destinations");
+    let entries = report.as_array().expect("destination array");
+    assert_eq!(entries.len(), 1, "{report}");
+    assert_eq!(entries[0]["name"], json!("Appendix"));
+    assert_eq!(entries[0]["page"], json!(1));
+}
+
+#[test]
+fn list_destinations_returns_an_empty_array_and_rejects_broken_files() {
+    let workspace = Workspace::new();
+    let plain = workspace.create("plain.pdf", None, &["One", "Two"]);
+    let report = list_destinations(&plain).expect("list destinations without a name tree");
+    assert_eq!(report, json!([]));
+
+    let broken = workspace.write("broken.pdf", b"not a pdf");
+    assert_invalid(list_destinations(&broken), "format/invalid");
 }
 
 #[test]
@@ -1103,6 +1154,7 @@ fn capabilities_disclose_new_filters_forms_and_image_extraction() {
     assert_eq!(matrix["operations"]["rotatePages"], "supported");
     assert_eq!(matrix["operations"]["setPageBoxes"], "supported");
     assert_eq!(matrix["operations"]["metadata"], "supported");
+    assert_eq!(matrix["operations"]["listDestinations"], "supported");
     let color_spaces = &matrix["formats"]["pdf"]["image"]["colorSpaces"];
     for color_space in ["deviceGray", "deviceRgb", "deviceCmyk", "indexed"] {
         assert_eq!(color_spaces[color_space], "supported", "{color_space}");

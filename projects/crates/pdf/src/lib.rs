@@ -1214,7 +1214,8 @@ pub fn capabilities() -> serde_json::Value {
             "search": "partial",
             "extractImages": "supported",
             "extractImagesPages": "supported",
-            "extractLinks": "supported"
+            "extractLinks": "supported",
+            "listDestinations": "supported"
         },
         "checks": {
             "metadata": "supported",
