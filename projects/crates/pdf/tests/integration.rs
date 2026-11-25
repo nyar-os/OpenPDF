@@ -2147,6 +2147,12 @@ fn merge_selected_keeps_only_the_requested_pages_per_input() {
     assert_eq!(report["sources"][0]["ranges"], json!("3,1"));
     assert_eq!(report["sources"][1]["selected"], json!(2));
     assert_eq!(report["sources"][1]["ranges"], json!(null));
+    assert!(report["fidelity"].is_array(), "the compose report carries fidelity: {}", report["fidelity"]);
+    assert_eq!(
+        metadata(&merged).expect("metadata of the merged file")["metadata"]["title"],
+        json!("First"),
+        "the first input's title survives the single compose pass"
+    );
 
     let inspected = inspect(&merged).expect("inspect merged");
     assert_eq!(inspected.pages, 4);
@@ -2157,6 +2163,17 @@ fn merge_selected_keeps_only_the_requested_pages_per_input() {
     let eee = extracted.find("EEE").expect("EEE");
     assert!(ccc < aaa && aaa < ddd && ddd < eee, "selection order is not preserved: {extracted}");
     assert!(!extracted.contains("BBB"), "the dropped page is gone: {extracted}");
+
+    let titled = workspace.path("titled.pdf");
+    merge_selected(
+        &[workspace.create("other.pdf", Some("Second"), &["FFF"])],
+        None,
+        &titled,
+        false,
+        Some("Combined"),
+    )
+    .expect("merge with a title");
+    assert_eq!(metadata(&titled).expect("metadata")["metadata"]["title"], json!("Combined"));
 }
 
 #[test]

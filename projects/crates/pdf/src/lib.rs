@@ -401,12 +401,13 @@ pub fn clear_metadata(path: &Path, out: &Path) -> Result<SetMetadataReport, Serv
 /// Merges inputs after removing pages outside each input's selection.
 ///
 /// `selections` is positional: entry `i` is the one-based page ranges kept from
-/// input `i`, and inputs past the end of the list keep every page. A selection
-/// that leaves the document in its original order is merged directly; any other
-/// selection is projected through `split` first, so the output order follows the
-/// ranges (`3,1` writes page 3 before page 1). Ranges that are malformed, empty
-/// or outside their document fail with `session/argument-invalid` before the
-/// output is written, and an existing output is replaced only with `overwrite`.
+/// input `i`, and inputs past the end of the list keep every page. Every input
+/// contributes one page plan, so the output order follows the ranges (`3,1`
+/// writes page 3 before page 1) in a single compose pass. `title` replaces the
+/// `/Title` of the first input's information dictionary when given. Ranges that
+/// are malformed, empty or outside their document fail with
+/// `session/argument-invalid` before the output is written, and an existing
+/// output is replaced only with `overwrite`.
 pub fn merge_selected(
     inputs: &[PathBuf],
     selections: Option<&[String]>,
@@ -432,44 +433,35 @@ pub fn merge_selected(
         )
         .with_params(json!({ "path": out.display().to_string() })));
     }
-    let scratch = temporary_path().with_extension("merge");
-    let outcome = (|| -> Result<(MergeReport, Vec<Value>), ServiceError> {
-        let mut paths = Vec::with_capacity(inputs.len());
-        let mut sources = Vec::with_capacity(inputs.len());
-        for (index, input) in inputs.iter().enumerate() {
-            let total = document_pdf::inspect(input)?.pages;
-            let ranges = selections.and_then(|selections| selections.get(index)).map(|ranges| ranges.trim());
-            let selected = match ranges {
-                Some(ranges) => parse_page_ranges(ranges, total)?,
-                None => (1..=total).collect(),
-            };
-            if selected.iter().copied().eq(1..=total) {
-                paths.push(input.clone());
-            }
-            else {
-                let directory = scratch.join(format!("source-{index}"));
-                let split = document_pdf::split(input, ranges.expect("a partial selection parses its ranges"), &directory)?;
-                paths.extend(split.documents.into_iter().map(|document| PathBuf::from(document.path)));
-            }
-            sources.push(json!({
-                "path": input.display().to_string(),
-                "pages": total,
-                "selected": selected.len(),
-                "ranges": ranges,
-            }));
-        }
-        let merged = document_pdf::merge(&paths, out, true, title)?;
-        Ok((merged, sources))
-    })();
-    let _ = fs::remove_dir_all(&scratch);
-    let (merged, sources) = outcome?;
-    let bytes = fs::metadata(out).map(|metadata| metadata.len()).unwrap_or(0);
+    let mut sources = Vec::with_capacity(inputs.len());
+    let mut placements = Vec::new();
+    for (index, input) in inputs.iter().enumerate() {
+        let total = document_pdf::inspect(input)?.pages;
+        let ranges = selections.and_then(|selections| selections.get(index)).map(|ranges| ranges.trim());
+        let selected = match ranges {
+            Some(ranges) => parse_page_ranges(ranges, total)?,
+            None => (1..=total).collect(),
+        };
+        placements.extend(selected.iter().map(|page| document_pdf::PagePlacement::Source { source: index, page: *page }));
+        sources.push(json!({
+            "path": input.display().to_string(),
+            "pages": total,
+            "selected": selected.len(),
+            "ranges": ranges,
+        }));
+    }
+    let composed = document_pdf::compose_with_title(
+        &document_pdf::PagePlan { sources: inputs.to_vec(), placements },
+        out,
+        overwrite,
+        title,
+    )?;
     Ok(json!({
-        "path": out.display().to_string(),
-        "pages": merged.pages,
-        "bytes": bytes,
+        "path": composed.path,
+        "pages": composed.pages,
+        "bytes": composed.bytes,
         "sources": sources,
-        "fidelity": merged.fidelity,
+        "fidelity": composed.fidelity,
     }))
 }
 
