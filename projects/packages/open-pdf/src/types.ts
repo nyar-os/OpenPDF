@@ -227,12 +227,31 @@ export interface MergeSource {
     readonly ranges: string | null;
 }
 
+/** Stable reason code for a fidelity loss reported by a page operation. */
+export type FidelityCode = 'outlines-dropped' | 'acro-form-dropped' | 'destinations-dropped' | 'catalog-entry-dropped' | 'annotations-dropped';
+
+/** One object a page operation dropped from the output instead of losing it silently. */
+export interface FidelityLoss {
+    /** Stable reason code. */
+    readonly code: FidelityCode;
+    /** 0-based index of the source document the loss belongs to. */
+    readonly source: number;
+    /** 1-based page for page-scoped losses, `null` for document-scoped ones. */
+    readonly page: number | null;
+    /** The dropped PDF entry, such as `/Outlines` or `/Annots`. */
+    readonly entry: string;
+    /** Human-readable explanation. */
+    readonly message: string;
+}
+
 /** Result of `merge()`. */
 export interface MergeReport {
     readonly path: string;
     readonly pages: number;
     readonly bytes: number;
     readonly sources?: readonly MergeSource[];
+    /** Objects the rebuilt catalog and dropped pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** One file produced by `split()`. */
@@ -275,6 +294,8 @@ export interface SplitBookmarksReport {
 export interface ArrangeReport {
     readonly path: string;
     readonly pages: number;
+    /** Objects the rebuilt catalog and dropped pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `duplicatePages()`. */
@@ -288,6 +309,8 @@ export interface DuplicatePagesReport {
     readonly duplicated: readonly number[];
     /** Copies written for each selected page. */
     readonly times: number;
+    /** Objects the rebuilt catalog and unplaced pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `insertPages()`. */
@@ -307,6 +330,8 @@ export interface InsertPagesReport {
     readonly insert: string;
     /** One-based target page the inserted pages follow; `0` means first. */
     readonly after: number;
+    /** Objects the rebuilt catalog and unplaced pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `insertBlankPages()`. */
@@ -320,6 +345,8 @@ export interface InsertBlankPagesReport {
     readonly insertedPages: number;
     /** One-based target page the blanks follow; `0` means first. */
     readonly after: number;
+    /** Objects the rebuilt catalog left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `interleavePages()`. */
@@ -330,6 +357,8 @@ export interface InterleavePagesReport {
     readonly firstPages: number;
     readonly second: string;
     readonly secondPages: number;
+    /** Objects the rebuilt catalogs and unplaced pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `replacePages()`. */
@@ -349,6 +378,8 @@ export interface ReplacePagesReport {
     readonly selectedPages: readonly number[];
     /** The replacement document. */
     readonly insert: string;
+    /** Objects the rebuilt catalog and replaced pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `movePages()`. */
@@ -362,6 +393,8 @@ export interface MovePagesReport {
     readonly moved: readonly number[];
     /** Anchor page the selection follows; `0` means the front. */
     readonly after: number;
+    /** Objects the rebuilt catalog left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `reversePages()`. */
@@ -373,6 +406,8 @@ export interface ReversePagesReport {
     readonly sourcePages: number;
     /** One-based pages reversed; every page when no selection was given. */
     readonly reversed: readonly number[];
+    /** Objects the rebuilt catalog left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `swapPages()`. */
@@ -386,6 +421,8 @@ export interface SwapPagesReport {
     readonly swapped: readonly number[];
     /** The pages that took the `swapped` positions. */
     readonly with: readonly number[];
+    /** Objects the rebuilt catalog left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `deletePages()`. */
@@ -396,6 +433,8 @@ export interface DeletePagesReport {
     /** Pages dropped from the source document. */
     readonly removed: number;
     readonly bytes: number;
+    /** Objects the rebuilt catalog and removed pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `keepPages()`. */
@@ -408,6 +447,8 @@ export interface KeepPagesReport {
     /** Pages dropped from the source document. */
     readonly removed: number;
     readonly bytes: number;
+    /** Objects the rebuilt catalog and removed pages left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `rotatePages()`. */
@@ -418,6 +459,8 @@ export interface RotatePagesReport {
     /** Pages whose effective `/Rotate` changed. */
     readonly rotated: number;
     readonly bytes: number;
+    /** Objects the rebuilt catalog left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** Result of `setPageBoxes()`. */
@@ -428,6 +471,8 @@ export interface SetPageBoxesReport {
     /** Pages that received the new `/CropBox`. */
     readonly cropped: number;
     readonly bytes: number;
+    /** Objects the rebuilt catalog left behind, never silent. */
+    readonly fidelity: readonly FidelityLoss[];
 }
 
 /** `/CropBox` corners in points, `[left, bottom, right, top]`. */

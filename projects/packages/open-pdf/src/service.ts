@@ -418,10 +418,10 @@ export function keepPages(path: string, pages: string, out: string, overwrite = 
             });
         }
         copyFileSync(path, out);
-        return { path: out, pages: total, kept: total, removed: 0, bytes: statSync(out).size };
+        return { path: out, pages: total, kept: total, removed: 0, bytes: statSync(out).size, fidelity: [] };
     }
     const report = deletePages(path, formatPageList(removed), out, overwrite);
-    return { path: report.path, pages: report.pages, kept: report.pages, removed: report.removed, bytes: report.bytes };
+    return { path: report.path, pages: report.pages, kept: report.pages, removed: report.removed, bytes: report.bytes, fidelity: report.fidelity };
 }
 
 /** Adds a clockwise rotation to the selected pages into a new PDF. */

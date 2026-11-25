@@ -9,11 +9,11 @@
 
 pub use document_pdf::{
     ArrangeReport, Bookmark, BookmarkReport, CreateReport, CreateRequest, DeletePagesReport, DocumentArrange, ExtractLoss,
-    ExtractReport, ExtractedImage, FormFillReport, FormValue, InspectReport, MergeReport, MetadataPatch, PdfBookmark, PdfFormField,
-    PdfMetadata, PdfPageSize, RotatePagesReport, SetMetadataReport, SetPageBoxesReport, SplitPart, SplitReport,
-    StampReport, StampRequest, arrange, create, delete_pages, extract_images, extract_images_bytes, extract_text,
-    extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks, set_metadata, set_page_boxes, split,
-    split_every, stamp,
+    ExtractReport, ExtractedImage, FidelityCode, FidelityLoss, FormFillReport, FormValue, InspectReport, MergeReport,
+    MetadataPatch, PdfBookmark, PdfFormField, PdfMetadata, PdfPageSize, RotatePagesReport, SetMetadataReport, SetPageBoxesReport,
+    SplitPart, SplitReport, StampReport, StampRequest, arrange, create, delete_pages, extract_images, extract_images_bytes,
+    extract_text, extract_text_bytes, fill_form, inspect, inspect_bytes, merge, rotate_pages, set_bookmarks, set_metadata,
+    set_page_boxes, split, split_every, stamp,
 };
 
 use std::{
@@ -469,6 +469,7 @@ pub fn merge_selected(
         "pages": merged.pages,
         "bytes": bytes,
         "sources": sources,
+        "fidelity": merged.fidelity,
     }))
 }
 
@@ -505,6 +506,7 @@ pub fn duplicate_pages(
         "sourcePages": total,
         "duplicated": selected,
         "times": times,
+        "fidelity": composed.fidelity,
     }))
 }
 
@@ -552,6 +554,7 @@ pub fn insert_pages(
         "selectedPages": chosen,
         "insert": insert.display().to_string(),
         "after": after,
+        "fidelity": composed.fidelity,
     }))
 }
 
@@ -633,6 +636,7 @@ pub fn insert_blank_pages(
         "sourcePages": total,
         "insertedPages": count,
         "after": after,
+        "fidelity": composed.fidelity,
     }))
 }
 
@@ -724,6 +728,7 @@ pub fn replace_pages(
         "sourceInsertPages": available,
         "selectedPages": chosen,
         "insert": insert.display().to_string(),
+        "fidelity": composed.fidelity,
     }))
 }
 
@@ -758,6 +763,7 @@ pub fn reverse_pages(
         "pages": arranged.pages,
         "sourcePages": total,
         "reversed": reversed,
+        "fidelity": arranged.fidelity,
     }))
 }
 
@@ -788,6 +794,7 @@ pub fn move_pages(path: &Path, pages: &str, after: u32, out: &Path, overwrite: b
         "sourcePages": total,
         "moved": selected,
         "after": after,
+        "fidelity": arranged.fidelity,
     }))
 }
 
@@ -819,6 +826,7 @@ pub fn swap_pages(path: &Path, pages: &str, with: &str, out: &Path, overwrite: b
         "sourcePages": total,
         "swapped": left,
         "with": right,
+        "fidelity": arranged.fidelity,
     }))
 }
 
@@ -1082,6 +1090,7 @@ pub fn interleave_pages(first: &Path, second: &Path, out: &Path, overwrite: bool
         "firstPages": first_pages,
         "second": second.display().to_string(),
         "secondPages": second_pages,
+        "fidelity": composed.fidelity,
     }))
 }
 

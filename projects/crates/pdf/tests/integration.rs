@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use data_compression::{CodecLimits, DeflateLevel, Zlib};
 use open_pdf_core::{
-    Bookmark, CreateRequest, DocumentArrange, FormValue, MetadataPatch, StampRequest, arrange, capabilities, clear_metadata, create,
+    Bookmark, CreateRequest, DocumentArrange, FidelityCode, FormValue, MetadataPatch, StampRequest, arrange, capabilities,
+    clear_metadata, create,
     delete_pages,
     duplicate_pages,
     extract_images, extract_images_pages, extract_links, extract_text, extract_text_bytes, extract_text_pages, fill_form, inspect,
@@ -1257,6 +1258,73 @@ fn duplicate_pages_repeats_the_selection_in_place() {
     let error = duplicate_pages(&path, "9", 2, &workspace.path("range.pdf"), true).expect_err("page outside the document");
     assert_eq!(error.code(), "session/argument-invalid");
     assert_eq!(error.params()["pages"], json!("9"), "the rejected selection is named");
+}
+
+#[test]
+fn page_operations_report_dropped_objects_instead_of_losing_them_silently() {
+    let workspace = Workspace::new();
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /Outlines 5 0 R /AcroForm 6 0 R /Lang (en) >>",
+        "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Annots [7 0 R] >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] >>",
+        "<< /Type /Outlines /First 8 0 R /Last 8 0 R /Count 1 >>",
+        "<< /Fields [9 0 R] >>",
+        "<< /Type /Annot /Subtype /Link /Rect [10 10 50 30] /Dest [4 0 R /Fit] >>",
+        "<< /Title (Start) /Dest [3 0 R /Fit] /Parent 5 0 R >>",
+        "<< /T (name) /FT /Tx /V (x) /P 3 0 R >>",
+    ];
+    let mut bytes = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (index, body) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(
+        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes(),
+    );
+    let path = workspace.write("complex.pdf", &bytes);
+
+    // Duplicating page 2 keeps every page, so only the rebuilt catalog loses
+    // entries, and the report must name each one.
+    let report = duplicate_pages(&path, "2", 2, &workspace.path("doubled.pdf"), true).expect("duplicate complex pages");
+    let codes: Vec<&str> = report["fidelity"]
+        .as_array()
+        .expect("the report carries a fidelity array")
+        .iter()
+        .map(|loss| loss["code"].as_str().expect("every loss carries a code"))
+        .collect();
+    for expected in ["outlines-dropped", "acro-form-dropped", "catalog-entry-dropped"] {
+        assert!(codes.contains(&expected), "missing {expected} in {codes:?}");
+    }
+    assert!(!codes.contains(&"annotations-dropped"), "a duplicated document keeps every annotation: {codes:?}");
+
+    // Deleting page 1 leaves its annotation behind, and the loss is named.
+    let deleted = delete_pages(&path, "1", &workspace.path("thinned.pdf"), true).expect("delete complex pages");
+    let annotation = deleted
+        .fidelity
+        .iter()
+        .find(|loss| loss.code == FidelityCode::AnnotationsDropped)
+        .expect("the dropped page annotation is named");
+    assert_eq!((annotation.page, annotation.entry.as_str()), (Some(1), "/Annots"));
+
+    // Keeping every page still reports the catalog rebuild, never silently.
+    let arranged = arrange(&path, &workspace.path("reordered.pdf"), &DocumentArrange {
+        order: Some(vec![2, 1]),
+        ..DocumentArrange::default()
+    })
+    .expect("arrange complex pages");
+    assert!(arranged.fidelity.iter().any(|loss| loss.code == FidelityCode::OutlinesDropped));
+    assert!(
+        !arranged.fidelity.iter().any(|loss| loss.code == FidelityCode::AnnotationsDropped),
+        "kept pages keep their annotations: {:?}",
+        arranged.fidelity
+    );
 }
 
 #[test]
