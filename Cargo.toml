@@ -16,9 +16,9 @@ repository = "https://github.com/nyar-os/OpenPDF"
 # Shared host facade for the Node-API surface. Cross-repo git dependencies pin
 # the full 40-character revision so local builds and CI resolve the same commit.
 wae = { git = "https://github.com/doki-land/wae-framework.git", rev = "f92f818fde7174154d77a87b55a5e44b367034c9", default-features = false, features = ["webview"] }
-document-pdf = { git = "https://github.com/oovm/rust-boost", rev = "c125e3ee029abf466c30892b0bf17a7db6a68284", default-features = false }
-data-binary-pdf = { git = "https://github.com/oovm/rust-boost", rev = "c125e3ee029abf466c30892b0bf17a7db6a68284", default-features = false }
-data-compression = { git = "https://github.com/oovm/rust-boost", rev = "c125e3ee029abf466c30892b0bf17a7db6a68284", default-features = false, features = ["deflate"] }
+document-pdf = { git = "https://github.com/oovm/rust-boost", rev = "0ece26c987992326cfb768934183e99ae473a118", default-features = false }
+data-binary-pdf = { git = "https://github.com/oovm/rust-boost", rev = "0ece26c987992326cfb768934183e99ae473a118", default-features = false }
+data-compression = { git = "https://github.com/oovm/rust-boost", rev = "0ece26c987992326cfb768934183e99ae473a118", default-features = false, features = ["deflate"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
